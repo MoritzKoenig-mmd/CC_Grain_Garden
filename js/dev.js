@@ -1,6 +1,6 @@
 // Dev mode: a settings panel. Open with ?dev in the address, or Shift+D.
 
-import { settings, update, reset } from './settings.js';
+import { settings, update, reset, onSettings, isShared, devKey, setDevKey } from './settings.js';
 import { sprayStamp, bufferToImage } from './brush.js';
 import { toRgbTable } from './config.js';
 
@@ -59,10 +59,46 @@ export class DevPanel {
       }
     });
 
+    this.connected = false;
+    this.presence = 0;
+    this.note = '';
+    // someone else changed the shared settings: show the new values
+    // (unless you are in the middle of editing something here)
+    onSettings(() => {
+      if (!this.el.hidden && !this.el.contains(document.activeElement)) this.render();
+    });
+
     if (new URLSearchParams(location.search).has('dev')) {
       this.toggleBtn.hidden = false;
       this.toggle(true);
     }
+  }
+
+  setStatus(connected) {
+    this.connected = connected;
+    this.#paintStatus();
+  }
+
+  setPresence(n) {
+    this.presence = n;
+    this.#paintStatus();
+  }
+
+  // the server refused a settings change (wrong or missing dev key)
+  denied() {
+    this.note = 'wrong dev key, change not saved';
+    if (!this.el.hidden) this.render();
+    this.#paintStatus();
+  }
+
+  #paintStatus() {
+    if (!this.statusEl) return;
+    const where = !isShared()
+      ? 'offline, this browser only'
+      : this.connected
+        ? `shared, ${this.presence} here`
+        : 'reconnecting…';
+    this.statusEl.textContent = this.note ? `${where} · ${this.note}` : where;
   }
 
   toggle(open = this.el.hidden) {
@@ -180,6 +216,26 @@ export class DevPanel {
         el('strong', {}, 'dev'),
         el('button', { type: 'button', class: 'dev-x', 'aria-label': 'close', onclick: () => this.toggle(false) }, '×'),
       ),
+      (this.statusEl = el('p', { class: 'dev-status' })),
+      isShared()
+        ? el(
+            'label',
+            { class: 'dev-row' },
+            el('span', { class: 'dev-label' }, 'dev key'),
+            el('input', {
+              type: 'password',
+              class: 'dev-key',
+              value: devKey(),
+              placeholder: 'needed to change settings for everyone',
+              autocomplete: 'off',
+              oninput: (e) => {
+                setDevKey(e.target.value);
+                this.note = '';
+                this.#paintStatus();
+              },
+            }),
+          )
+        : '',
 
       el(
         'section',
@@ -353,5 +409,6 @@ export class DevPanel {
         ),
       ),
     );
+    this.#paintStatus();
   }
 }

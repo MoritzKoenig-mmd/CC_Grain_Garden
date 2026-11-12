@@ -1,0 +1,4 @@
+node_modules/
+garden.json
+garden.json.tmp
+.DS_Store

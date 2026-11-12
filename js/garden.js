@@ -1,15 +1,17 @@
 import { ART } from './config.js';
 import { Flower } from './flower.js';
 import { settings } from "./settings.js";
+import { now as clockNow } from './clock.js';
 
 // The garden is exactly one screen: no scrolling, flowers are placed by
 // fractions of the viewport so they keep their spots when it resizes.
 export class Garden {
-  constructor(canvas, { onTend, onChange }) {
+  constructor(canvas, { onTend, onChange, onMove = () => {} }) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.onTend = onTend;
     this.onChange = onChange;
+    this.onMove = onMove; // (flower, final) while it is being dragged
     this.flowers = [];
     this.hovered = null;
     this.active = true;
@@ -54,6 +56,21 @@ export class Garden {
     this.flowers.sort((a, b) => a.ny - b.ny);
   }
 
+  // after someone else moved a flower
+  resort() {
+    this.#sort();
+  }
+
+  byId(id) {
+    return this.flowers.find((f) => f.id === id);
+  }
+
+  // a flower someone else planted
+  add(f) {
+    this.flowers.push(f);
+    this.#sort();
+  }
+
   // Find the most open patch of ground on screen.
   findSpot() {
     const groundH = this.h * 0.36;
@@ -77,7 +94,7 @@ export class Garden {
   }
 
   plant(pixels, colors) {
-    const f = new Flower({ ...this.findSpot(), pixels, colors, tendedAt: Date.now() });
+    const f = new Flower({ ...this.findSpot(), pixels, colors, tendedAt: clockNow() });
     this.flowers.push(f);
     this.#sort();
     this.onChange();
@@ -101,6 +118,7 @@ export class Garden {
     const y = Math.min(this.h, Math.max(this.h * 0.06, py - gy * s));
     f.ny = this.nyFor(y);
     f.nx = Math.min(1, Math.max(0, (px - gx * s) / this.w));
+    this.onMove(f, false);
   }
 
   flowerAt(px, py) {
@@ -169,6 +187,7 @@ export class Garden {
       this.dragging = null;
       c.classList.remove('dragging');
       this.#sort();
+      this.onMove(f, true);
       this.onChange();
     };
     c.addEventListener('pointerup', end);
@@ -185,7 +204,7 @@ export class Garden {
 
   #frame(ms) {
     const t = ms / 1000;
-    const now = Date.now();
+    const now = clockNow();
     const ctx = this.ctx;
     const { w, h, dpr } = this;
 

@@ -40,3 +40,25 @@ export const hexToRgb = (hex) => {
 
 // [null, rgb, rgb, ...] so that pixel value v maps to colours[v - 1].
 export const toRgbTable = (colors) => [null, ...colors.map(hexToRgb)];
+
+// ---------- the shared garden ----------
+
+// Where the socket server (server.js) runs. When server.js serves this page
+// itself (npm start → localhost:3000) the socket connects to the same address.
+// GitHub Pages only hosts files, so there the page has to be told where the
+// server lives: put the deployed server's address here,
+// e.g. 'https://grain-garden.onrender.com'.
+export const PAGES_SERVER = '';
+const LOCAL_PORT = '3000'; // where `npm start` runs the server
+
+// ?server=https://… overrides it (handy for testing). Returns undefined for
+// "same address as this page", or null when there is no server to talk to.
+export function serverUrl() {
+  const forced = new URLSearchParams(location.search).get('server');
+  if (forced) return forced;
+  if (location.hostname.endsWith('github.io')) return PAGES_SERVER || null;
+  // opened from the file or another local server (e.g. VS Code Live Server)
+  const local = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  if (local && location.port !== LOCAL_PORT) return `http://localhost:${LOCAL_PORT}`;
+  return undefined;
+}
