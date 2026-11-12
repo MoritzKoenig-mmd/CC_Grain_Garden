@@ -1,7 +1,5 @@
 import { ART, DRY_BAND, DUST, ASH, LEGACY_PALETTE, COLLAPSE_AT, COLLAPSE_MS, toRgbTable, toNeon } from "./config.js";
 import { lifespanMs } from "./settings.js";
-import { now as clockNow } from './clock.js';
-import { decode } from './store.js';
 import { makeWitherField, randomSeed } from './noise.js';
 import { addGlow } from './glow.js';
 
@@ -12,17 +10,16 @@ const mix = (a, b, t) => [
 ];
 
 export class Flower {
-  constructor({ id, nx, ny, seed, tendedAt, pausedAt, pixels, pixelsKey, colors }) {
+  constructor({ id, nx, ny, seed, tendedAt, pixels, colors }) {
     this.id = id || Math.random().toString(36).slice(2, 10);
     this.nx = nx;
     this.ny = ny;
     this.seed = seed ?? randomSeed();
-    this.tendedAt = tendedAt ?? clockNow();
+    this.tendedAt = tendedAt ?? Date.now();
     // pixel value v is drawn in colors[v - 1]; each flower keeps its own
     this.colors = toNeon(colors && colors.length ? colors : LEGACY_PALETTE);
     this.pixels = pixels;
-    this.pixelsKey = pixelsKey || null; // encoded pixels as last received, to spot redraws
-    this.pausedAt = pausedAt ?? null;
+    this.pausedAt = null;
     this.phase = Math.random() * Math.PI * 2;
 
     this.canvas = document.createElement('canvas');
@@ -139,24 +136,6 @@ export class Flower {
     this.pausedAt = null;
     this.seed = randomSeed();
     this.#rebuild();
-  }
-
-  // Take on an update from the server: someone else moved, paused or redrew it.
-  applyRecord(r, { keepPlace = false } = {}) {
-    if (!keepPlace) {
-      this.nx = r.nx;
-      this.ny = r.ny;
-    }
-    this.tendedAt = r.tendedAt;
-    this.pausedAt = r.pausedAt ?? null;
-    if (r.pixels && (r.pixels !== this.pixelsKey || r.seed !== this.seed)) {
-      this.pixels = decode(r.pixels);
-      this.pixelsKey = r.pixels;
-      this.colors = toNeon(r.colors && r.colors.length ? r.colors : LEGACY_PALETTE);
-      this.seed = r.seed;
-      this.#rebuild();
-    }
-    this.level = -1; // repaint at the (possibly new) wither level
   }
 
   hitTest(lx, ly) {

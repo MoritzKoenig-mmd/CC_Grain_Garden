@@ -1,9 +1,6 @@
-// Flower records: the compact form a flower travels in, over the socket to
-// the shared garden's server, or into localStorage when there is no server.
-// The album always stays in this browser.
-
-import { ART } from './config.js';
-import { now } from './clock.js';
+// Persistence. Right now the garden lives in this browser's localStorage.
+// To make one shared garden for everyone, swap load/save for calls to a
+// backend that stores the same records.
 
 const KEY = 'grain-garden/v1';
 const ALBUM_KEY = 'grain-garden/album/v1';
@@ -24,7 +21,7 @@ export function encode(buf) {
   return btoa(s);
 }
 
-export function decode(str, length = ART * ART) {
+export function decode(str, length) {
   const s = atob(str);
   const buf = new Uint8Array(length);
   let p = 0;
@@ -36,24 +33,6 @@ export function decode(str, length = ART * ART) {
   }
   return buf;
 }
-
-export function toRecord(f) {
-  return {
-    id: f.id,
-    nx: f.nx,
-    ny: f.ny,
-    colors: f.colors,
-    seed: f.seed,
-    tendedAt: f.tendedAt,
-    pausedAt: f.pausedAt,
-    pixels: encode(f.pixels),
-  };
-}
-
-// Record → options for new Flower() (pixels decoded).
-export const fromRecord = (r) => ({ ...r, pixels: decode(r.pixels), pixelsKey: r.pixels });
-
-// ---------- offline fallback: this browser only ----------
 
 // Returns null on a first visit (nothing stored yet), otherwise an array.
 export function load(length) {
@@ -68,14 +47,16 @@ export function load(length) {
 
 export function save(flowers) {
   try {
-    const t = now();
-    const records = flowers.map((f) => {
-      const r = toRecord(f);
+    const records = flowers.map((f) => ({
+      id: f.id,
+      nx: f.nx,
+      ny: f.ny,
+      colors: f.colors,
+      seed: f.seed,
       // time spent being tended doesn't count toward withering
-      if (f.pausedAt != null) r.tendedAt = f.tendedAt + (t - f.pausedAt);
-      r.pausedAt = null;
-      return r;
-    });
+      tendedAt: f.pausedAt == null ? f.tendedAt : f.tendedAt + (Date.now() - f.pausedAt),
+      pixels: encode(f.pixels),
+    }));
     localStorage.setItem(KEY, JSON.stringify(records));
   } catch {
     /* storage full or blocked: the garden still works for this visit */

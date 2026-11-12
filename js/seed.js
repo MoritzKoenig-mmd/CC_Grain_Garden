@@ -6,7 +6,6 @@ import { ART, LEGACY_PALETTE } from './config.js';
 import { lifespanMs } from './settings.js';
 import { sprayPath } from './brush.js';
 import { mulberry32 } from './noise.js';
-import { now as clockNow } from './clock.js';
 
 const TAU = Math.PI * 2;
 
@@ -83,7 +82,7 @@ function tulip(buf, rand, { cx, cy, s, color, r }) {
 }
 
 export function seedFlowers() {
-  const now = clockNow();
+  const now = Date.now();
   const make = (draw, opts, seed) => {
     const buf = new Uint8Array(ART * ART);
     draw(buf, mulberry32(seed), opts);
@@ -96,5 +95,5 @@ export function seedFlowers() {
     { nx: 0.46, ny: 0.35, age: 0.22, pixels: make(clover, { cx: 72, cy: 50, pr: 20, color: 7, r: 4.4 }, 42) },
     { nx: 0.56, ny: 0.7, age: 0.8, pixels: make(tulip, { cx: 72, cy: 56, s: 26, color: 6, r: 4.8 }, 9) },
     { nx: 0.68, ny: 0.25, age: 0.35, pixels: make(petalFlower, { cx: 72, cy: 48, petals: 6, pr: 18, color: 4, r: 4.4 }, 77) },
-  ].map(({ age, ...rest }) => ({ ...rest, age, colors: LEGACY_PALETTE, tendedAt: now - age * lifespanMs() }));
+  ].map(({ age, ...rest }) => ({ ...rest, colors: LEGACY_PALETTE, tendedAt: now - age * lifespanMs() }));
 }

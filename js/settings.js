@@ -1,5 +1,4 @@
-// Everything adjustable from dev mode. In the shared garden these live on the
-// server and apply to everyone; offline they stay in this browser's localStorage.
+// Everything adjustable from dev mode. Stored in this browser's localStorage.
 
 import { toNeon } from './config.js';
 
@@ -62,44 +61,12 @@ function load() {
 export const settings = load();
 const listeners = new Set();
 
-// When the garden is shared, `remote` sends a change to the server.
-let remote = null;
-export const setRemote = (fn) => (remote = fn);
-export const isShared = () => !!remote;
-
 export function update(patch) {
   Object.assign(settings, patch);
-  if (remote) remote(patch);
-  else {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(settings));
-    } catch {}
-  }
-  listeners.forEach((fn) => fn(settings));
-}
-
-// Take the garden-wide settings from the server (defaults fill the gaps).
-export function replaceAll(shared = {}) {
-  const merged = { ...clone(DEFAULTS), ...migrate({ ...shared, version: shared.version || VERSION }) };
-  merged.tools = { ...DEFAULTS.tools, ...(shared.tools || {}) };
-  for (const k of Object.keys(settings)) delete settings[k];
-  Object.assign(settings, merged);
-  listeners.forEach((fn) => fn(settings));
-}
-
-// The dev key unlocks changing the shared settings (DEV_KEY on the server).
-const DEV_KEY_STORE = 'grain-garden/devkey';
-export function devKey() {
   try {
-    return localStorage.getItem(DEV_KEY_STORE) || '';
-  } catch {
-    return '';
-  }
-}
-export function setDevKey(k) {
-  try {
-    localStorage.setItem(DEV_KEY_STORE, k);
+    localStorage.setItem(KEY, JSON.stringify(settings));
   } catch {}
+  listeners.forEach((fn) => fn(settings));
 }
 
 export const reset = () => update(clone(DEFAULTS));

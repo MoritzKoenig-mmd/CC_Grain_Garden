@@ -6,11 +6,7 @@ import { DevPanel } from './dev.js';
 import { Album } from './album.js';
 import { sprayStamp, bufferToImage } from './brush.js';
 import { seedFlowers } from './seed.js';
-import {
-  settings, onSettings, lifespanMs, randomColor, setRemote, replaceAll, isShared, devKey,
-} from './settings.js';
-import { now as clockNow, syncClock } from './clock.js';
-import { connect } from './net.js';
+import { settings, onSettings, lifespanMs, randomColor } from './settings.js';
 import * as store from './store.js';
 
 // ---------- static film grain ----------
@@ -59,66 +55,36 @@ function applyLook() {
 
 // ---------- wiring ----------
 
-// Replaced by the real connection below; until then (and offline) emits go nowhere.
-let net = { online: false, emit() {} };
-
-// Offline (no server reachable) the garden is kept in this browser instead.
-const save = () => {
-  if (!net.online) store.save(garden.flowers);
-};
-
-// Drags are shared live, but at most ~20 times a second per flower.
-const lastSent = new Map();
-function sendMove(f, final) {
-  if (!net.online) return;
-  const t = performance.now();
-  if (!final && t - (lastSent.get(f.id) || 0) < 50) return;
-  lastSent.set(f.id, t);
-  net.emit('move', { id: f.id, nx: f.nx, ny: f.ny });
-}
-
-function share(event, flower) {
-  const r = store.toRecord(flower);
-  flower.pixelsKey = r.pixels;
-  net.emit(event, r);
-}
+const save = () => store.save(garden.flowers);
 
 const garden = new Garden(document.getElementById('garden'), {
   onTend(flower) {
-    const now = clockNow();
-    flower.pause(now); // tending holds back the withering, for everyone
-    net.emit('pause', flower.id);
+    const now = Date.now();
+    flower.pause(now); // tending holds back the withering
     garden.active = false;
     studio.open(flower, flower.remaining(now));
   },
   onChange: save,
-  onMove: sendMove,
 });
 
 const studio = new Studio({
   onPlant(pixels, colors, flower) {
     garden.active = true;
     drawDot();
-    // someone else's flower may have withered away while this one was redrawn
-    if (flower && !garden.flowers.includes(flower)) flower = null;
     if (!flower) {
-      share('plant', garden.plant(pixels, colors));
+      garden.plant(pixels, colors);
       return;
     }
     if (!pixels.some((v) => v)) {
       garden.remove(flower);
-      net.emit('remove', flower.id);
       return;
     }
-    flower.tend(pixels, colors, clockNow());
-    share('tend', flower);
+    flower.tend(pixels, colors, Date.now());
     save();
   },
   onLeave(flower) {
     garden.active = true;
-    if (!flower) return;
-    flower.resume(clockNow());
-    net.emit('resume', flower.id);
+    if (flower) flower.resume(Date.now());
   },
   onKeep: (pixels, colors) => album.add(pixels, colors),
 });
@@ -137,79 +103,33 @@ document.getElementById('draw').addEventListener('click', () => {
   studio.open(null);
 });
 
-const dev = new DevPanel();
+let records = store.load(ART * ART);
+if (records === null) records = seedFlowers();
+garden.setFlowers(records.map((r) => new Flower(r)));
+save();
 
-// ---------- the shared garden (socket.io, see server.js) ----------
-
-net = connect({
-  // like the template's history: the whole garden, on every (re)connect
-  onState(s) {
-    syncClock(s.serverNow);
-    setRemote((patch) => net.emit('settings', { key: devKey(), patch }));
-    replaceAll(s.settings);
-    garden.setFlowers(s.flowers.map((r) => new Flower(store.fromRecord(r))));
-    // the very first visitor plants the starter flowers for everyone
-    if (!s.seeded) {
-      const seeds = seedFlowers().map((r) => ({ ...store.toRecord(new Flower(r)), age: r.age }));
-      net.emit('seed', seeds);
-    }
-    dev.setStatus(true);
-  },
-  onFlower(r) {
-    const f = garden.byId(r.id);
-    if (f) {
-      f.applyRecord(r, { keepPlace: garden.dragging === f });
-      garden.resort();
-    } else {
-      garden.add(new Flower(store.fromRecord(r)));
-    }
-  },
-  onMove(m) {
-    const f = garden.byId(m.id);
-    if (!f || garden.dragging === f) return; // my own drag wins on my screen
-    f.nx = m.nx;
-    f.ny = m.ny;
-    garden.resort();
-  },
-  onRemove(id) {
-    const f = garden.byId(id);
-    if (f) garden.remove(f);
-  },
-  onSettings: (s) => replaceAll(s),
-  onPresence: (n) => dev.setPresence(n),
-  onDenied: () => dev.denied(),
-  onStatus: (connected) => dev.setStatus(connected),
-  onOffline() {
-    let records = store.load(ART * ART);
-    if (records === null) records = seedFlowers();
-    garden.setFlowers(records.map((r) => new Flower(r)));
-    save();
-    dev.setStatus(false);
-  },
-});
-
-// When the withering speed changes, every flower keeps how far along it is
-// (in the shared garden the server does this for everyone).
+// When the withering speed changes, every flower keeps how far along it is.
 let lastLifespan = lifespanMs();
 onSettings(() => {
   applyLook();
   const next = lifespanMs();
-  if (next !== lastLifespan && !isShared()) {
-    const now = clockNow();
+  if (next !== lastLifespan) {
+    const now = Date.now();
     for (const f of garden.flowers) {
       const at = f.pausedAt ?? now;
       const progress = (at - f.tendedAt) / lastLifespan;
       f.tendedAt = at - progress * next;
     }
+    lastLifespan = next;
     save();
   }
-  lastLifespan = next;
 });
 
 applyLook();
 drawDot();
+new DevPanel();
 
-// keep the stored state fresh if the tab is closed mid-tend (offline only)
+// keep the stored state fresh if the tab is closed mid-tend
 window.addEventListener('pagehide', save);
 
 // /#draw opens straight into the studio, /#album into the album
