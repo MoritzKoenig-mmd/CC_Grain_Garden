@@ -2,21 +2,26 @@
   --ink: #2a2530;
   --ink-soft: rgba(42, 37, 48, 0.55);
   --paper: #fbf8f1;
-  --veil: rgba(42, 37, 48, 0.16);
+  --veil: rgba(42, 37, 48, 0.22);
   --pill: rgba(251, 248, 241, 0.82);
   --accent: #e8141c;
+  /* words are sprayed by an opacity threshold, so their colours must be solid */
+  --ink-mute: #8a868f;
+  --hand: "Playpen Sans", "Comic Sans MS", system-ui, sans-serif;
   --font: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.defs { position: absolute; }
 
 html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #f3efe7;
+  background: #fff;
   color: var(--ink);
-  font-family: var(--font);
+  font-family: var(--hand);
   font-size: 13px;
   letter-spacing: 0.02em;
   -webkit-font-smoothing: antialiased;
@@ -31,24 +36,66 @@ html, body {
   display: block;
   touch-action: none;
 }
-#garden.over-flower { cursor: grab; }
-#garden.dragging { cursor: grabbing; }
+
+/* ---------- cursors ---------- */
+/* The sprayed arrow and hand from _assets/cursor1 and cursor2, shrunk to the
+   32 px browsers reliably allow (64 px for sharp screens). The numbers are the
+   hotspot: the arrow's tip, the middle of the palm. */
+html, .word:disabled {
+  cursor: url("img/cursor-arrow.png") 4 2, auto;
+  cursor: -webkit-image-set(url("img/cursor-arrow.png") 1x, url("img/cursor-arrow@2x.png") 2x) 4 2, auto;
+  cursor: image-set(url("img/cursor-arrow.png") 1x, url("img/cursor-arrow@2x.png") 2x) 4 2, auto;
+}
+/* anything you can press or pick up: the words, and flowers in the garden */
+.word, #garden.over-flower, #garden.dragging {
+  cursor: url("img/cursor-hand.png") 16 16, pointer;
+  cursor: -webkit-image-set(url("img/cursor-hand.png") 1x, url("img/cursor-hand@2x.png") 2x) 16 16, pointer;
+  cursor: image-set(url("img/cursor-hand.png") 1x, url("img/cursor-hand@2x.png") 2x) 16 16, pointer;
+}
+/* on the drawing sheet: a sprayed crosshair, paint lands in the gap at its centre */
+#paper {
+  cursor: url("img/cursor-draw.png") 16 16, crosshair;
+  cursor: -webkit-image-set(url("img/cursor-draw.png") 1x, url("img/cursor-draw@2x.png") 2x) 16 16, crosshair;
+  cursor: image-set(url("img/cursor-draw.png") 1x, url("img/cursor-draw@2x.png") 2x) 16 16, crosshair;
+}
 
 .mark {
   position: fixed;
-  top: max(16px, env(safe-area-inset-top));
-  left: 20px;
-  font-size: 13px;
-  color: var(--ink-soft);
+  top: max(12px, env(safe-area-inset-top));
+  left: 18px;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ink-mute);
+  filter: url(#spray);
   pointer-events: none;
   user-select: none;
 }
-html[data-dark="true"] .mark { color: rgba(240, 236, 255, 0.6); }
+html[data-dark="true"] .mark { color: #a9a4b8; }
 
 /* ---------- buttons ---------- */
 
 button { font: inherit; color: inherit; }
 
+/* Handwritten, sprayed words instead of boxes: the language of the drawings. */
+.word {
+  border: 0;
+  background: none;
+  padding: 6px 10px;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink);
+  filter: url(#spray);
+  transition: transform 140ms ease, opacity 140ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.word:hover { transform: rotate(-3deg) translateY(-1px); }
+.word:active { transform: translateY(1px); }
+.word:disabled { opacity: 0.3; transform: none; }
+.word:focus-visible { outline: none; text-decoration: underline 2px; text-underline-offset: 6px; }
+html[data-dark="true"] .word { color: #f0ecff; }
+
+/* the dev toggle keeps the plain pill look; it isn't part of the piece */
 .pill {
   display: inline-flex;
   align-items: center;
@@ -68,19 +115,43 @@ button { font: inherit; color: inherit; }
 .pill:disabled { opacity: 0.35; cursor: default; transform: none; }
 .pill.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px rgba(42,37,48,0.25); }
 .pill.ghost:hover { background: rgba(251,248,241,0.35); }
-.pill:focus-visible, .tool:focus-visible, #dev :focus-visible {
+.pill:focus-visible, #dev :focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
-#draw {
+/* bottom right: album · draw */
+.dock {
   position: fixed;
-  right: 20px;
-  bottom: max(20px, env(safe-area-inset-bottom));
+  right: 14px;
+  bottom: max(12px, env(safe-area-inset-bottom));
   z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
-#draw .dot { width: 12px; height: 12px; image-rendering: pixelated; }
-body:has(#studio:not([hidden])) #draw { visibility: hidden; }
+.dock .word { font-size: 34px; }
+body:has(#studio:not([hidden])) .dock,
+body:has(#album:not([hidden])) .dock { visibility: hidden; }
+
+#draw {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  filter: none; /* the dot is already sprayed; only the word gets the filter */
+}
+#draw span { filter: url(#spray); }
+#draw:focus-visible span { text-decoration: underline 2px; text-underline-offset: 6px; }
+#draw .dot { width: 24px; height: 24px; image-rendering: pixelated; }
+
+/* the album word hops when a flower has flown into it */
+#album-open.bump { animation: bump 700ms cubic-bezier(.3,1.6,.5,1) 80ms both; }
+@keyframes bump {
+  0% { transform: none; }
+  35% { transform: translateY(-8px) rotate(-7deg) scale(1.15); }
+  70% { transform: translateY(1px) rotate(2deg); }
+  100% { transform: none; }
+}
 
 /* ---------- studio ---------- */
 
@@ -98,67 +169,186 @@ body:has(#studio:not([hidden])) #draw { visibility: hidden; }
 
 @keyframes veil-in { from { background-color: transparent; } to { background-color: var(--veil); } }
 
+/* kept: the words fade and the veil lifts while the sheet flies into the album */
+#studio.flying { animation: none; background-color: transparent; transition: background-color 500ms ease; }
+#studio.flying .actions { opacity: 0; transition: opacity 180ms ease; }
+
 .studio-inner {
-  display: grid;
-  grid-template-columns: auto auto;
-  grid-template-areas:
-    "paper tools"
-    "actions actions";
-  gap: 18px 22px;
-  align-items: start;
+  /* the sheet keeps frame.png's proportions and leaves room for the words below */
+  --sheet: min(560px, calc(100vw - 32px), calc((100vh - 110px) * 252 / 282));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   animation: lift-in 260ms cubic-bezier(.2,.8,.2,1) both;
 }
 @keyframes lift-in { from { transform: translateY(14px); } to { transform: none; } }
 
+/* The paper is the sprayed frame from _assets, scaled up with hard edges so
+   its grain stays chunky like the drawings. */
+.sheet {
+  position: relative;
+  width: var(--sheet);
+  aspect-ratio: 252 / 282;
+  background: url("img/frame.png") center / 100% 100% no-repeat;
+  image-rendering: pixelated;
+}
+
+/* The drawing sits on the frame's white middle (the largest clean square in
+   frame.png is ~206 of its 252 px, centred a little above half). It may be a
+   touch bigger than that: its own outer band is a grainy fade (see
+   sprayedEdge in noise.js), so paint thins out before the frame does. */
 #paper {
-  grid-area: paper;
-  width: min(72vmin, 600px, calc(100vw - 140px));
+  position: absolute;
+  left: 7%;
+  top: 10.5%;
+  width: 86%;
   height: auto;
   aspect-ratio: 1;
-  background: var(--paper);
   image-rendering: pixelated;
   touch-action: none;
-  cursor: crosshair;
-  box-shadow: 0 1px 0 rgba(42,37,48,0.08), 0 24px 60px -30px rgba(60,40,70,0.45);
 }
-
-.tools {
-  grid-area: tools;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-.misc { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-.tool {
-  border: 0;
-  background: transparent;
-  padding: 4px 0;
-  cursor: pointer;
-  color: var(--ink-soft);
-}
-.tool:hover { color: var(--ink); }
-.tool[aria-pressed="true"] { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
 
 .actions {
-  grid-area: actions;
+  width: var(--sheet);
   display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
 }
 
-@media (max-width: 640px) {
-  .studio-inner {
-    grid-template-columns: 1fr;
-    grid-template-areas: "paper" "tools" "actions";
-    justify-items: center;
-    gap: 14px;
-  }
-  #paper { width: min(calc(100vw - 32px), 62vh); }
-  .tools { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 16px; }
-  .misc { flex-direction: row; gap: 12px; align-self: center; }
-  .actions { justify-content: center; }
+.act-end { display: flex; align-items: center; }
+.tools { display: flex; flex-wrap: wrap; justify-content: center; }
+.tool { font-size: 24px; color: #5f5a66; padding: 6px 6px; }
+.tool[aria-pressed="true"] { color: var(--ink); text-decoration: underline 2px; text-underline-offset: 6px; }
+
+/* narrow screens: tools get their own row above leave / plant */
+@media (max-width: 520px) {
+  .actions { flex-wrap: wrap; }
+  .tools { order: -1; width: 100%; }
 }
+
+/* ---------- album ---------- */
+
+/* A pop-up like the drawing sheet: the same veil over the garden, with a
+   stream of sprayed paper (img/strip.png, from _assets/showaces) running off
+   the top and bottom of the screen. The paper scrolls with the flowers and
+   never ends, so the album reads as endless. */
+#album {
+  --strip: min(460px, calc(100vw - 24px));
+  /* one art pixel: a whole 144 px drawing would fill 55% of the stream */
+  --px: calc(var(--strip) * 0.55 / 144);
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  overflow-y: auto; /* scrolls from anywhere, not only over the paper */
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  background: var(--veil);
+  animation: veil-in 220ms ease both;
+}
+#album::-webkit-scrollbar { display: none; }
+
+.stream {
+  width: var(--strip);
+  min-height: 100%;
+  margin: 0 auto;
+  /* the strip's solid white middle is 84% of its width; content stays in it.
+     Half a screen of empty paper after the last flower: the stream goes on. */
+  padding: 72px 9% 50vh;
+  background: url("img/strip.png") center top / 100% auto repeat-y;
+  image-rendering: pixelated;
+  animation: lift-in 260ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+/* leave · count, on the veil either side of the stream */
+.album-actions {
+  position: fixed;
+  z-index: 1;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(calc(100vw - 16px), calc(var(--strip) + 320px));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+}
+.album-actions > * { pointer-events: auto; }
+/* on narrow screens the stream covers the garden label; don't let a sliver peek out */
+@media (max-width: 700px) {
+  body:has(#album:not([hidden])) > .mark { visibility: hidden; }
+}
+
+.stream-title {
+  margin: 0 0 28px;
+  text-align: center;
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--ink);
+  filter: url(#spray);
+}
+
+.album-count {
+  padding: 6px 10px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #6f6a76;
+  filter: url(#spray);
+}
+
+.album-empty {
+  margin: 20vh 0 0;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--ink);
+  filter: url(#spray);
+}
+.album-empty small {
+  display: block;
+  margin-top: 10px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #6f6a76;
+}
+
+.kept {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 44px;
+}
+/* laid down by hand: alternately a little left and right */
+.kept-flower {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+.kept-flower:nth-child(odd) { transform: translateX(-8%); }
+.kept-flower:nth-child(even) { transform: translateX(8%); }
+.kept-flower canvas {
+  width: calc(var(--px) * var(--w));
+  max-width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+.kept-label {
+  margin: 6px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #6f6a76;
+  filter: url(#spray);
+}
+.kept-remove { font-size: 18px; color: var(--ink-mute); padding: 2px 8px; opacity: 0; }
+.kept-flower:hover .kept-remove,
+.kept-remove:focus-visible { opacity: 1; }
+@media (hover: none) { .kept-remove { opacity: 1; } }
 
 /* ---------- dev panel ---------- */
 
@@ -169,6 +359,7 @@ body:has(#studio:not([hidden])) #draw { visibility: hidden; }
   z-index: 3;
   height: 30px;
   padding: 0 12px;
+  font-family: var(--font);
   font-size: 12px;
 }
 #dev-toggle[hidden] { display: none; }
@@ -186,6 +377,7 @@ html[data-dark="true"] #dev-toggle { color: #f0ecff; box-shadow: inset 0 0 0 1px
   padding: 14px 16px 16px;
   background: rgba(251, 248, 241, 0.95);
   color: var(--ink);
+  font-family: var(--font);
   font-size: 12px;
   box-shadow: 0 18px 50px -24px rgba(40, 30, 50, 0.5);
 }

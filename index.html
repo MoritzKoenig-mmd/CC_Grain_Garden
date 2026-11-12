@@ -6,37 +6,70 @@
   <title>Grain Garden</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playpen+Sans:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Sprays the edges of words, like the brush: the outline is softened, then
+       broken up with noise, so letters get a dense core and a speckled fringe. -->
+  <svg class="defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <filter id="spray" x="-15%" y="-30%" width="130%" height="160%" color-interpolation-filters="sRGB">
+      <feMorphology in="SourceGraphic" operator="dilate" radius="3" result="fat"/>
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.6" result="soft"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="1" seed="7" result="noise"/>
+      <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0" result="grain"/>
+      <feComposite in="soft" in2="grain" operator="arithmetic" k1="0" k2="1" k3="-1.5" k4="0.75" result="raw"/>
+      <feComponentTransfer in="raw" result="mask"><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>
+      <feComposite in="fat" in2="mask" operator="in" result="ink"/>
+      <feComponentTransfer in="ink"><feFuncA type="discrete" tableValues="0 1 1 1 1 1 1 1"/></feComponentTransfer>
+    </filter>
+  </svg>
+
   <canvas id="garden" aria-label="the garden"></canvas>
 
   <header class="mark">garden</header>
 
-  <button id="draw" class="pill" type="button" aria-label="draw a flower">
-    <canvas class="dot" width="12" height="12"></canvas>
-    <span>draw</span>
-  </button>
+  <nav class="dock">
+    <button id="album-open" class="word" type="button" aria-label="open the album">album</button>
+    <button id="draw" class="word" type="button" aria-label="draw a flower">
+      <canvas class="dot" width="12" height="12"></canvas>
+      <span>draw</span>
+    </button>
+  </nav>
 
   <div id="studio" hidden>
     <div class="studio-inner">
-      <canvas id="paper" width="144" height="144"></canvas>
-
-      <div class="tools">
-        <div class="misc">
-          <button type="button" data-tool="erase" class="tool">erase</button>
-          <button type="button" data-tool="undo" class="tool">undo</button>
-          <button type="button" data-tool="clear" class="tool">clear</button>
-        </div>
+      <div class="sheet">
+        <canvas id="paper" width="144" height="144"></canvas>
       </div>
 
       <div class="actions">
-        <button type="button" id="leave" class="pill ghost">leave</button>
-        <button type="button" id="plant" class="pill">plant</button>
+        <button type="button" id="leave" class="word">leave</button>
+        <div class="tools">
+          <button type="button" data-tool="erase" class="word tool">erase</button>
+          <button type="button" data-tool="undo" class="word tool">undo</button>
+          <button type="button" data-tool="clear" class="word tool">clear</button>
+        </div>
+        <div class="act-end">
+          <button type="button" id="keep" class="word" hidden>keep</button>
+          <button type="button" id="plant" class="word">plant</button>
+        </div>
       </div>
     </div>
   </div>
+
+  <section id="album" hidden aria-label="album of kept flowers">
+    <div class="stream">
+      <h2 class="stream-title">album</h2>
+      <p class="album-empty">nothing kept yet<small>open a flower in the garden and keep it</small></p>
+      <ol class="kept"></ol>
+    </div>
+
+    <div class="album-actions">
+      <button type="button" id="album-close" class="word">leave</button>
+      <span class="album-count"></span>
+    </div>
+  </section>
 
   <aside id="dev" hidden aria-label="dev settings"></aside>
   <button id="dev-toggle" class="pill ghost" type="button" hidden>dev</button>

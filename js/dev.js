@@ -217,22 +217,6 @@ export class DevPanel {
       el(
         'section',
         {},
-        el('h3', {}, 'garden'),
-        el(
-          'label',
-          { class: 'dev-check' },
-          el('input', {
-            type: 'checkbox',
-            checked: s.depthScale,
-            onchange: (e) => update({ depthScale: e.target.checked }),
-          }),
-          'closer flowers are bigger',
-        ),
-      ),
-
-      el(
-        'section',
-        {},
         el('h3', {}, 'withering'),
         el(
           'label',

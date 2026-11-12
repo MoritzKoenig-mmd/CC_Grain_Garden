@@ -3,9 +3,10 @@
 // backend that stores the same records.
 
 const KEY = 'grain-garden/v1';
+const ALBUM_KEY = 'grain-garden/album/v1';
 
 // Run-length encode a palette buffer: [value, run, value, run, ...] -> base64.
-function encode(buf) {
+export function encode(buf) {
   const out = [];
   let i = 0;
   while (i < buf.length) {
@@ -20,7 +21,7 @@ function encode(buf) {
   return btoa(s);
 }
 
-function decode(str, length) {
+export function decode(str, length) {
   const s = atob(str);
   const buf = new Uint8Array(length);
   let p = 0;
@@ -50,7 +51,6 @@ export function save(flowers) {
       id: f.id,
       nx: f.nx,
       ny: f.ny,
-      size: f.size,
       colors: f.colors,
       seed: f.seed,
       // time spent being tended doesn't count toward withering
@@ -60,5 +60,25 @@ export function save(flowers) {
     localStorage.setItem(KEY, JSON.stringify(records));
   } catch {
     /* storage full or blocked: the garden still works for this visit */
+  }
+}
+
+// The album: kept flowers, stored as they were (pixels stay encoded).
+export function loadAlbum() {
+  try {
+    const list = JSON.parse(localStorage.getItem(ALBUM_KEY) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+// Returns false when the browser refuses (storage full or blocked).
+export function saveAlbum(entries) {
+  try {
+    localStorage.setItem(ALBUM_KEY, JSON.stringify(entries));
+    return true;
+  } catch {
+    return false;
   }
 }

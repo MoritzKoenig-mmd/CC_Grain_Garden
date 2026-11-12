@@ -1,20 +1,22 @@
 // Everything adjustable from dev mode. Stored in this browser's localStorage.
 
+import { toNeon } from './config.js';
+
 const KEY = 'grain-garden/settings';
-const VERSION = 2;
+const VERSION = 4;
 
 export const DEFAULTS = {
   version: VERSION,
-  background: '#f3efe7', // off-white
+  background: '#ffffff',
   grain: 0.2, // film grain overlay strength, 0..0.6
-  depthScale: true, // flowers lower on screen (closer) are drawn bigger
   lifespanMin: 10, // minutes for an untended flower to wither away
   colorPer: 'stroke', // new random colour every 'stroke', or one per 'flower'
   brushPer: 'flower', // random brush size once per 'flower', or every 'stroke'
-  colors: ['#e8141c', '#a9adf5', '#f5a524', '#f6dc3c', '#f48cc0', '#3fae55', '#8fd3f0'],
+  // neon: saturated enough to shine, deep enough to hold up on white
+  colors: ['#ff1744', '#ff1fb4', '#ff6a00', '#ffd000', '#00e65c', '#00b4ff', '#2d5bff', '#7c3aff'],
   brushes: [2.6, 4.6, 8], // brush radii in art pixels
   stems: true, // new drawings start with one of the predefined stems
-  stemColor: '#3fae55',
+  stemColor: '#00e65c',
   tools: { erase: false, undo: false, clear: false }, // which studio tools are shown
 };
 
@@ -23,7 +25,14 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 
 // Bring settings saved by older versions of the site up to date.
 function migrate(saved) {
-  if (saved.background === '#b4b8e0') delete saved.background; // old lavender default
+  // old lavender and off-white defaults
+  if (['#b4b8e0', '#f3efe7'].includes(saved.background)) delete saved.background;
+  delete saved.depthScale; // every flower is drawn at the same size now
+  if ((saved.version || 0) < 4) {
+    // the palette went neon
+    if (Array.isArray(saved.colors)) saved.colors = toNeon(saved.colors);
+    if (typeof saved.stemColor === 'string') [saved.stemColor] = toNeon([saved.stemColor]);
+  }
   if (!saved.version || saved.version < 2) {
     // black is out, and colours now change with every stroke
     if (Array.isArray(saved.colors)) {

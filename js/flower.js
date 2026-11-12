@@ -1,6 +1,7 @@
-import { ART, DRY_BAND, DUST, ASH, LEGACY_PALETTE, toRgbTable } from "./config.js";
+import { ART, DRY_BAND, DUST, ASH, LEGACY_PALETTE, COLLAPSE_AT, COLLAPSE_MS, toRgbTable, toNeon } from "./config.js";
 import { lifespanMs } from "./settings.js";
 import { makeWitherField, randomSeed } from './noise.js';
+import { addGlow } from './glow.js';
 
 const mix = (a, b, t) => [
   a[0] + (b[0] - a[0]) * t,
@@ -9,15 +10,14 @@ const mix = (a, b, t) => [
 ];
 
 export class Flower {
-  constructor({ id, nx, ny, size, seed, tendedAt, pixels, colors }) {
+  constructor({ id, nx, ny, seed, tendedAt, pixels, colors }) {
     this.id = id || Math.random().toString(36).slice(2, 10);
     this.nx = nx;
     this.ny = ny;
-    this.size = size ?? 1; // set by people pinching / scrolling in the garden
     this.seed = seed ?? randomSeed();
     this.tendedAt = tendedAt ?? Date.now();
     // pixel value v is drawn in colors[v - 1]; each flower keeps its own
-    this.colors = colors && colors.length ? colors : LEGACY_PALETTE;
+    this.colors = toNeon(colors && colors.length ? colors : LEGACY_PALETTE);
     this.pixels = pixels;
     this.pausedAt = null;
     this.phase = Math.random() * Math.PI * 2;
@@ -53,9 +53,17 @@ export class Flower {
     this.box = { minX, minY, maxX, maxY, cx: (minX + maxX + 1) / 2, bottom: maxY + 1 };
   }
 
+  // How far gone the flower is, 0..1. It withers slowly up to COLLAPSE_AT over
+  // most of its lifespan, then the rest falls apart in its last few seconds.
+  // Only depends on time, so it picks up where it was after a reload.
   witherAt(now) {
-    const t = this.pausedAt ?? now;
-    return Math.min(1, Math.max(0, (t - this.tendedAt) / lifespanMs()));
+    const age = (this.pausedAt ?? now) - this.tendedAt;
+    if (age <= 0) return 0;
+    const life = lifespanMs();
+    const fall = Math.min(COLLAPSE_MS, life * 0.25); // very short dev lifespans still wither first
+    const slow = life - fall;
+    if (age < slow) return (COLLAPSE_AT * age) / slow;
+    return Math.min(1, COLLAPSE_AT + ((1 - COLLAPSE_AT) * (age - slow)) / fall);
   }
 
   isGone(now) {
@@ -96,6 +104,7 @@ export class Flower {
       d[j + 2] = c[2];
       d[j + 3] = 255;
     }
+    addGlow(d, ART, ART);
     this.ctx.putImageData(this.img, 0, 0);
   }
 
