@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Grain Garden</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="garden" aria-label="the garden"></canvas>
+
+  <header class="mark">garden</header>
+
+  <button id="draw" class="pill" type="button" aria-label="draw a flower">
+    <canvas class="dot" width="12" height="12"></canvas>
+    <span>draw</span>
+  </button>
+
+  <div id="studio" hidden>
+    <div class="studio-inner">
+      <canvas id="paper" width="144" height="144"></canvas>
+
+      <div class="tools">
+        <div class="misc">
+          <button type="button" data-tool="erase" class="tool">erase</button>
+          <button type="button" data-tool="undo" class="tool">undo</button>
+          <button type="button" data-tool="clear" class="tool">clear</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="button" id="leave" class="pill ghost">leave</button>
+        <button type="button" id="plant" class="pill">plant</button>
+      </div>
+    </div>
+  </div>
+
+  <aside id="dev" hidden aria-label="dev settings"></aside>
+  <button id="dev-toggle" class="pill ghost" type="button" hidden>dev</button>
+
+  <div class="grain" aria-hidden="true"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
