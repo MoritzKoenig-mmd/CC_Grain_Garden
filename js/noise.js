@@ -39,6 +39,30 @@ function valueNoise(size, cell, rand) {
   return out;
 }
 
+// A stencil for the drawing sheet: 1 where paint may land, 0 where it may not.
+// Toward a rounded border it dissolves into grain, like the sprayed paper
+// frame, so a drawing never ends in a hard square edge. `band` is how wide the
+// dissolving border is and `radius` how round its corners are (art px).
+export function sprayedEdge(size, seed, band = 22, radius = 30) {
+  const rand = mulberry32(seed);
+  const wobble = valueNoise(size, 23, rand); // keeps the outline hand-sprayed, not geometric
+  const mask = new Uint8Array(size * size);
+  const h = size / 2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // how far inside the rounded square this pixel is
+      const qx = Math.abs(x + 0.5 - h) - (h - radius);
+      const qy = Math.abs(y + 0.5 - h) - (h - radius);
+      const outside = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
+      const depth = -outside + (wobble[y * size + x] - 0.5) * band * 0.6;
+      let t = Math.min(1, Math.max(0, depth / band));
+      t = t * t * (3 - 2 * t);
+      mask[y * size + x] = rand() < t ? 1 : 0;
+    }
+  }
+  return mask;
+}
+
 // The wither field: layered noise plus per-pixel grain, then rank-normalised so
 // values are uniformly spread over 0..1. That way a wither level of 0.3 erases
 // ~30% of the flower, and 1.0 erases all of it.

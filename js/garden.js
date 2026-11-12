@@ -2,9 +2,6 @@ import { ART } from './config.js';
 import { Flower } from './flower.js';
 import { settings } from "./settings.js";
 
-const MIN_SIZE = 0.3;
-const MAX_SIZE = 3.5;
-
 // The garden is exactly one screen: no scrolling, flowers are placed by
 // fractions of the viewport so they keep their spots when it resizes.
 export class Garden {
@@ -32,23 +29,18 @@ export class Garden {
     this.h = window.innerHeight;
     this.canvas.width = Math.round(this.w * dpr);
     this.canvas.height = Math.round(this.h * dpr);
+    // every flower is drawn at the same size, which only follows the screen
+    this.scale = 1.9 * Math.min(1.3, Math.max(0.5, Math.min(this.h / 850, this.w / 900)));
   }
 
-  // ny 0..1 spans the ground from back to front; flowers can be moved beyond
-  // it (up into the sky), where they keep the size they'd have at the back.
+  // ny 0..1 spans the strip of ground new flowers are planted in; people can
+  // drag them anywhere, up into the sky too. Lower flowers are drawn in front.
   groundY(ny) {
     return this.h * (0.6 + 0.36 * ny);
   }
 
   nyFor(y) {
     return (y / this.h - 0.6) / 0.36;
-  }
-
-  scaleFor(ny) {
-    const base = Math.min(1.3, Math.max(0.5, Math.min(this.h / 850, this.w / 900)));
-    // with depth scaling off, every flower gets the mid-ground size
-    const depth = settings.depthScale ? Math.min(1, Math.max(0, ny)) : 0.5;
-    return base * (1.25 + 1.35 * depth);
   }
 
   // ---------- flowers ----------
@@ -99,22 +91,16 @@ export class Garden {
   }
 
   #placement(f) {
-    return { x: f.nx * this.w, y: this.groundY(f.ny), s: this.scaleFor(f.ny) * f.size };
+    return { x: f.nx * this.w, y: this.groundY(f.ny), s: this.scale };
   }
 
   // Put the flower so that its grabbed point (gx, gy, in art px from its base)
-  // sits under the pointer. Size depends on depth, so settle it in a few steps.
+  // sits under the pointer.
   #moveTo(f, px, py, gx, gy) {
-    for (let i = 0; i < 5; i++) {
-      const s = this.scaleFor(f.ny) * f.size;
-      const y = Math.min(this.h, Math.max(this.h * 0.06, py - gy * s));
-      f.ny = this.nyFor(y);
-      f.nx = Math.min(1, Math.max(0, (px - gx * s) / this.w));
-    }
-  }
-
-  #resize(f, size) {
-    f.size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, size));
+    const s = this.scale;
+    const y = Math.min(this.h, Math.max(this.h * 0.06, py - gy * s));
+    f.ny = this.nyFor(y);
+    f.nx = Math.min(1, Math.max(0, (px - gx * s) / this.w));
   }
 
   flowerAt(px, py) {
@@ -131,42 +117,31 @@ export class Garden {
 
   // ---------- input ----------
 
-  // Press a flower and release in place → tend it.
-  // Press and drag → move it. Scroll / trackpad-pinch / two-finger pinch → scale it.
+  // Press a flower and release in place → tend it. Press and drag → move it.
   #bindInput() {
     const c = this.canvas;
-    const pointers = new Map();
-    let g = null; // the current gesture
-
-    const pinchDist = () => {
-      const [a, b] = [...pointers.values()];
-      return Math.hypot(a.x - b.x, a.y - b.y);
-    };
+    let g = null; // the current press: one flower, one pointer
 
     c.addEventListener('pointerdown', (e) => {
-      if (!this.active) return;
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!this.active || g) return;
+      const f = this.flowerAt(e.clientX, e.clientY);
+      if (!f) return;
       try { c.setPointerCapture(e.pointerId); } catch {}
-
-      if (pointers.size === 1) {
-        const f = this.flowerAt(e.clientX, e.clientY);
-        if (!f) return;
-        const p = this.#placement(f);
+      const p = this.#placement(f);
+      g = {
+        f,
+        id: e.pointerId,
+        moved: false,
+        sx: e.clientX,
+        sy: e.clientY,
         // where on the flower it was grabbed, in its own pixels
-        const gx = (e.clientX - p.x) / p.s;
-        const gy = (e.clientY - p.y) / p.s;
-        g = { f, mode: "press", sx: e.clientX, sy: e.clientY, gx, gy };
-      } else if (pointers.size === 2 && g) {
-        g.mode = 'pinch';
-        g.d0 = pinchDist();
-        g.size0 = g.f.size;
-      }
+        gx: (e.clientX - p.x) / p.s,
+        gy: (e.clientY - p.y) / p.s,
+      };
     });
 
     c.addEventListener('pointermove', (e) => {
       if (!this.active) return;
-      if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
       if (!g) {
         if (e.pointerType === 'mouse') {
           this.hovered = this.flowerAt(e.clientX, e.clientY);
@@ -174,35 +149,27 @@ export class Garden {
         }
         return;
       }
-      if (g.mode === 'press' && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) > 6) {
-        g.mode = 'drag';
+      if (e.pointerId !== g.id) return;
+      if (!g.moved && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) > 6) {
+        g.moved = true;
         this.dragging = g.f;
         c.classList.add('dragging');
       }
-      if (g.mode === 'drag') {
-        this.#moveTo(g.f, e.clientX, e.clientY, g.gx, g.gy);
-      } else if (g.mode === 'pinch' && pointers.size === 2 && g.d0 > 0) {
-        this.#resize(g.f, g.size0 * (pinchDist() / g.d0));
-      }
+      if (g.moved) this.#moveTo(g.f, e.clientX, e.clientY, g.gx, g.gy);
     });
 
     const end = (e) => {
-      pointers.delete(e.pointerId);
-      if (!g) return;
-      if (g.mode === 'press' && e.type === 'pointerup') {
-        const f = g.f;
-        g = null;
-        this.onTend(f);
+      if (!g || e.pointerId !== g.id) return;
+      const { f, moved } = g;
+      g = null;
+      if (!moved) {
+        if (e.type === 'pointerup') this.onTend(f);
         return;
       }
-      if (pointers.size > 0) return; // wait until every finger is lifted
-      if (g.mode === 'drag' || g.mode === 'pinch') {
-        this.#sort();
-        this.onChange();
-      }
-      g = null;
       this.dragging = null;
       c.classList.remove('dragging');
+      this.#sort();
+      this.onChange();
     };
     c.addEventListener('pointerup', end);
     c.addEventListener('pointercancel', end);
@@ -212,24 +179,6 @@ export class Garden {
       this.hovered = null;
       c.classList.remove('over-flower');
     });
-
-    let saveTimer = 0;
-    c.addEventListener(
-      'wheel',
-      (e) => {
-        if (!this.active) return;
-        const f = this.flowerAt(e.clientX, e.clientY) || this.hovered;
-        if (!f) return;
-        e.preventDefault();
-        // trackpad pinch arrives as ctrl+wheel with small deltas
-        const k = e.ctrlKey ? 0.012 : 0.0015;
-        this.#resize(f, f.size * Math.exp(-e.deltaY * k));
-        this.hovered = f;
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => this.onChange(), 300);
-      },
-      { passive: false },
-    );
   }
 
   // ---------- render ----------

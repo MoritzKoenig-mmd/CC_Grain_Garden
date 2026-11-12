@@ -3,6 +3,7 @@ import { Flower } from './flower.js';
 import { Garden } from './garden.js';
 import { Studio } from './studio.js';
 import { DevPanel } from './dev.js';
+import { Album } from './album.js';
 import { sprayStamp, bufferToImage } from './brush.js';
 import { seedFlowers } from './seed.js';
 import { settings, onSettings, lifespanMs, randomColor } from './settings.js';
@@ -85,6 +86,16 @@ const studio = new Studio({
     garden.active = true;
     if (flower) flower.resume(Date.now());
   },
+  onKeep: (pixels, colors) => album.add(pixels, colors),
+});
+
+const album = new Album({
+  onOpen() {
+    garden.active = false;
+  },
+  onClose() {
+    garden.active = true;
+  },
 });
 
 document.getElementById('draw').addEventListener('click', () => {
@@ -121,12 +132,15 @@ new DevPanel();
 // keep the stored state fresh if the tab is closed mid-tend
 window.addEventListener('pagehide', save);
 
-// /#draw opens straight into the studio
+// /#draw opens straight into the studio, /#album into the album
 if (location.hash === '#draw') {
   garden.active = false;
   studio.open(null);
+} else if (location.hash === '#album') {
+  album.open();
 }
 
 // handy for poking at the garden from the console
 window.__garden = garden;
 window.__studio = studio;
+window.__album = album;

@@ -9,15 +9,16 @@ const MID = ART / 2;
 
 // top: where the stem ends (x, y in art px) · bend: sideways bulge ·
 // s: S-curve amount · leaves: [position along stem 0..1, side -1|1, size]
+// Stems stay in the lower half or so, leaving the sheet free for the flower.
 export const STEMS = [
-  { name: 'straight', top: [72, 60], bend: 0, s: 0, leaves: [] },
-  { name: 'lean, one leaf', top: [82, 58], bend: 8, s: 0, leaves: [[0.45, -1, 13]] },
-  { name: 'arc, one leaf', top: [64, 62], bend: -10, s: 0, leaves: [[0.5, 1, 12]] },
-  { name: 's-curve, two leaves', top: [72, 56], bend: 0, s: 9, leaves: [[0.35, 1, 11], [0.62, -1, 10]] },
-  { name: 'tall, leaves at the base', top: [72, 50], bend: 3, s: 0, leaves: [[0.14, -1, 15], [0.2, 1, 14]] },
-  { name: 'drooping', top: [94, 68], bend: 18, s: 0, leaves: [[0.4, -1, 10]] },
-  { name: 'short, big leaf', top: [70, 86], bend: -4, s: 0, leaves: [[0.5, 1, 17]] },
-  { name: 'wavy, three leaves', top: [74, 56], bend: -5, s: -6, leaves: [[0.25, 1, 9], [0.45, -1, 9], [0.66, 1, 8]] },
+  { name: 'straight', top: [72, 84], bend: 0, s: 0, leaves: [] },
+  { name: 'lean, one leaf', top: [79, 83], bend: 6, s: 0, leaves: [[0.45, -1, 11]] },
+  { name: 'arc, one leaf', top: [66, 86], bend: -7, s: 0, leaves: [[0.5, 1, 10]] },
+  { name: 's-curve, two leaves', top: [72, 82], bend: 0, s: 6, leaves: [[0.35, 1, 9], [0.62, -1, 8]] },
+  { name: 'tall, leaves at the base', top: [72, 77], bend: 2, s: 0, leaves: [[0.16, -1, 12], [0.24, 1, 11]] },
+  { name: 'drooping', top: [87, 90], bend: 13, s: 0, leaves: [[0.4, -1, 8]] },
+  { name: 'short, big leaf', top: [71, 102], bend: -3, s: 0, leaves: [[0.5, 1, 14]] },
+  { name: 'wavy, three leaves', top: [73, 82], bend: -4, s: -4, leaves: [[0.25, 1, 7], [0.45, -1, 7], [0.66, 1, 7]] },
 ];
 
 function stemPath(x0, y0, x1, y1, bend, s, rand) {
