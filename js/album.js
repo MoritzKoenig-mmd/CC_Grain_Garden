@@ -1,11 +1,11 @@
 import { ART, toRgbTable, toNeon } from './config.js';
-import { addGlow, GLOW_REACH } from './glow.js';
 import * as store from './store.js';
 
 // The album: a pop-up over the garden like the drawing sheet, with a stream of
 // paper running off the top and bottom of the screen and every kept flower
-// laid down it, newest first. Kept flowers are copies taken from the garden;
-// they never wither. Each is cropped to its drawing but drawn at one shared
+// laid down it, newest first. Kept flowers are picked from the garden (they
+// leave it), never wither here and are there for good: nothing in the album
+// can be taken out again. Each is cropped to its drawing but drawn at one shared
 // pixel size, so a small flower stays small next to a big one.
 
 const dateLabel = (ms) =>
@@ -24,14 +24,6 @@ function boxOf(pixels) {
   }
   return x1 < 0 ? null : [x0, y0, x1, y1];
 }
-
-// The drawing's box with room around it for the glow.
-const withGlow = ([x0, y0, x1, y1]) => [
-  Math.max(0, x0 - GLOW_REACH),
-  Math.max(0, y0 - GLOW_REACH),
-  Math.min(ART - 1, x1 + GLOW_REACH),
-  Math.min(ART - 1, y1 + GLOW_REACH),
-];
 
 export class Album {
   constructor({ onOpen, onClose }) {
@@ -111,14 +103,6 @@ export class Album {
     return true;
   }
 
-  #remove(entry, li) {
-    const next = this.entries.filter((e) => e !== entry);
-    if (!store.saveAlbum(next)) return;
-    this.entries = next;
-    li.remove();
-    this.#updateCount();
-  }
-
   #render() {
     this.observer.disconnect();
     const items = [];
@@ -128,8 +112,7 @@ export class Album {
   }
 
   #item(entry) {
-    const box = withGlow(entry.box);
-    const [x0, y0, x1, y1] = box;
+    const [x0, y0, x1, y1] = entry.box;
     const w = x1 - x0 + 1;
     const h = y1 - y0 + 1;
     const label = `no. ${entry.no} · ${dateLabel(entry.keptAt)}`;
@@ -144,54 +127,34 @@ export class Album {
     canvas.setAttribute('role', 'img');
     canvas.setAttribute('aria-label', `kept flower ${label}`);
     canvas.entry = entry;
-    canvas.box = box;
     this.observer.observe(canvas);
 
     const caption = document.createElement('p');
     caption.className = 'kept-label';
     caption.textContent = label;
 
-    // two steps, so a stray tap doesn't throw a flower away
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'word kept-remove';
-    remove.textContent = 'remove';
-    let armed = 0;
-    remove.addEventListener('click', () => {
-      if (armed) {
-        this.#remove(entry, li);
-        return;
-      }
-      remove.textContent = 'sure?';
-      armed = setTimeout(() => {
-        armed = 0;
-        remove.textContent = 'remove';
-      }, 3000);
-    });
-
-    li.append(canvas, caption, remove);
+    li.append(canvas, caption);
     return li;
   }
 
   #paint(canvas, entry) {
-    const [x0, y0] = canvas.box;
+    const [x0, y0] = entry.box;
     const { width: w, height: h } = canvas;
-    // paint the whole sheet so the glow spreads as it does in the garden, then crop
     const pixels = store.decode(entry.pixels, ART * ART);
     const rgb = toRgbTable(entry.colors);
-    const full = new Uint8ClampedArray(ART * ART * 4);
-    for (let i = 0; i < pixels.length; i++) {
-      const v = pixels[i];
-      if (!v) continue;
-      full.set(rgb[v], i * 4);
-      full[i * 4 + 3] = 255;
-    }
-    addGlow(full, ART, ART);
     const ctx = canvas.getContext('2d');
     const img = ctx.createImageData(w, h);
     for (let y = 0; y < h; y++) {
-      const from = ((y + y0) * ART + x0) * 4;
-      img.data.set(full.subarray(from, from + w * 4), y * w * 4);
+      for (let x = 0; x < w; x++) {
+        const v = pixels[(y + y0) * ART + x + x0];
+        if (!v) continue;
+        const c = rgb[v];
+        const j = (y * w + x) * 4;
+        img.data[j] = c[0];
+        img.data[j + 1] = c[1];
+        img.data[j + 2] = c[2];
+        img.data[j + 3] = 255;
+      }
     }
     ctx.putImageData(img, 0, 0);
   }

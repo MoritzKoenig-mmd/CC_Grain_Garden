@@ -1,13 +1,41 @@
 import { ART, DRY_BAND, DUST, ASH, LEGACY_PALETTE, COLLAPSE_AT, COLLAPSE_MS, toRgbTable, toNeon } from "./config.js";
 import { lifespanMs } from "./settings.js";
 import { makeWitherField, randomSeed } from './noise.js';
-import { addGlow } from './glow.js';
 
 const mix = (a, b, t) => [
   a[0] + (b[0] - a[0]) * t,
   a[1] + (b[1] - a[1]) * t,
   a[2] + (b[2] - a[2]) * t,
 ];
+
+// Paint a palette drawing into RGBA data as it looks at wither level w (0..1):
+// gone where its field has dropped below w, a grainy drying edge in front of
+// that, and everything left fading toward dust. Flowers use it, and so does
+// the gate on the way in.
+export function paintWithered(d, pixels, rgb, { field, grainA, grainB }, w) {
+  const fade = Math.pow(w, 1.4) * 0.45;
+  const live = rgb.map((c) => c && mix(c, DUST, fade));
+  const dry = rgb.map((c) => c && mix(c, DUST, 0.62));
+
+  for (let i = 0, j = 0; i < pixels.length; i++, j += 4) {
+    const v = pixels[i];
+    const f = field[i];
+    if (!v || f <= w) {
+      d[j + 3] = 0;
+      continue;
+    }
+    let c = live[v];
+    if (w > 0 && f < w + DRY_BAND) {
+      // inside the drying edge: the closer to the erosion, the more grains turn
+      const t = (f - w) / DRY_BAND;
+      if (grainA[i] > t) c = grainB[i] < 0.4 ? ASH : dry[v];
+    }
+    d[j] = c[0];
+    d[j + 1] = c[1];
+    d[j + 2] = c[2];
+    d[j + 3] = 255;
+  }
+}
 
 export class Flower {
   constructor({ id, nx, ny, seed, tendedAt, pixels, colors }) {
@@ -79,32 +107,7 @@ export class Flower {
   }
 
   #paint(w) {
-    const { pixels, field, grainA, grainB } = this;
-    const d = this.img.data;
-    // the whole flower fades toward dust as it ages
-    const fade = Math.pow(w, 1.4) * 0.45;
-    const live = this.rgb.map((c) => c && mix(c, DUST, fade));
-    const dry = this.rgb.map((c) => c && mix(c, DUST, 0.62));
-
-    for (let i = 0, j = 0; i < pixels.length; i++, j += 4) {
-      const v = pixels[i];
-      const f = field[i];
-      if (!v || f <= w) {
-        d[j + 3] = 0;
-        continue;
-      }
-      let c = live[v];
-      if (w > 0 && f < w + DRY_BAND) {
-        // inside the drying edge: the closer to the erosion, the more grains turn
-        const t = (f - w) / DRY_BAND;
-        if (grainA[i] > t) c = grainB[i] < 0.4 ? ASH : dry[v];
-      }
-      d[j] = c[0];
-      d[j + 1] = c[1];
-      d[j + 2] = c[2];
-      d[j + 3] = 255;
-    }
-    addGlow(d, ART, ART);
+    paintWithered(this.img.data, this.pixels, this.rgb, this, w);
     this.ctx.putImageData(this.img, 0, 0);
   }
 

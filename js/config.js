@@ -4,6 +4,11 @@
 // at this size and scaled up with hard edges, which gives the chunky grain.
 export const ART = 144;
 
+// Screen px per art px. Everything sprayed (flowers, the gate, the tree) is
+// drawn at this one size, so the grain is the same grain everywhere; it only
+// follows the size of the screen.
+export const artScale = (w, h) => 1.9 * Math.min(1.3, Math.max(0.5, Math.min(h / 850, w / 900)));
+
 // Width of the "drying" edge in front of the erosion (0..1 of the noise range).
 export const DRY_BAND = 0.08;
 

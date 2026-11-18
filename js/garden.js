@@ -1,9 +1,10 @@
-import { ART } from './config.js';
+import { ART, artScale } from './config.js';
 import { Flower } from './flower.js';
 import { settings } from "./settings.js";
 
 // The garden is exactly one screen: no scrolling, flowers are placed by
-// fractions of the viewport so they keep their spots when it resizes.
+// fractions of the viewport so they keep their spots when it resizes. At the
+// back of it stand the places it leads to (places.js), behind the flowers.
 export class Garden {
   constructor(canvas, { onTend, onChange }) {
     this.canvas = canvas;
@@ -12,7 +13,10 @@ export class Garden {
     this.onChange = onChange;
     this.flowers = [];
     this.hovered = null;
+    this.places = [];
+    this.hotPlace = null; // the place the pointer is over
     this.active = true;
+    this.still = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     this.#bindInput();
     this.resize();
@@ -30,7 +34,8 @@ export class Garden {
     this.canvas.width = Math.round(this.w * dpr);
     this.canvas.height = Math.round(this.h * dpr);
     // every flower is drawn at the same size, which only follows the screen
-    this.scale = 1.9 * Math.min(1.3, Math.max(0.5, Math.min(this.h / 850, this.w / 900)));
+    this.scale = artScale(this.w, this.h);
+    for (const p of this.places) p.layout(this.w, this.h, this.scale);
   }
 
   // ny 0..1 spans the strip of ground new flowers are planted in; people can
@@ -41,6 +46,17 @@ export class Garden {
 
   nyFor(y) {
     return (y / this.h - 0.6) / 0.36;
+  }
+
+  // ---------- places ----------
+
+  addPlace(place) {
+    this.places.push(place);
+    place.layout(this.w, this.h, this.scale);
+  }
+
+  placeAt(px, py) {
+    return this.places.find((p) => p.hit(px, py)) || null;
   }
 
   // ---------- flowers ----------
@@ -54,7 +70,16 @@ export class Garden {
     this.flowers.sort((a, b) => a.ny - b.ny);
   }
 
-  // Find the most open patch of ground on screen.
+  // Would a flower standing here hide one of the places at the back?
+  #inTheWay(nx, ny) {
+    const s = this.scale;
+    const x = nx * this.w;
+    const y = this.groundY(ny);
+    const box = { x: x - 50 * s, y: y - 120 * s, w: 100 * s, h: 120 * s };
+    return this.places.some(({ rect: r }) => r && box.x < r.x + r.w && box.x + box.w > r.x && box.y < r.y + r.h && box.y + box.h > r.y);
+  }
+
+  // Find the most open patch of ground on screen, out of the way of the places.
   findSpot() {
     const groundH = this.h * 0.36;
     let best = null;
@@ -62,6 +87,7 @@ export class Garden {
     for (let i = 0; i < 64; i++) {
       const nx = 0.06 + Math.random() * 0.88;
       const ny = 0.1 + Math.random() * 0.85;
+      if (i < 48 && this.#inTheWay(nx, ny)) continue; // if nowhere's free, anywhere will do
       let nearest = Infinity;
       for (const f of this.flowers) {
         const dx = (f.nx - nx) * this.w;
@@ -118,14 +144,19 @@ export class Garden {
   // ---------- input ----------
 
   // Press a flower and release in place → tend it. Press and drag → move it.
+  // Press a place and release in place → go there. Flowers are in front.
   #bindInput() {
     const c = this.canvas;
-    let g = null; // the current press: one flower, one pointer
+    let g = null; // the current press: one flower or place, one pointer
 
     c.addEventListener('pointerdown', (e) => {
       if (!this.active || g) return;
       const f = this.flowerAt(e.clientX, e.clientY);
-      if (!f) return;
+      if (!f) {
+        const place = this.placeAt(e.clientX, e.clientY);
+        if (place) g = { place, id: e.pointerId, moved: false, sx: e.clientX, sy: e.clientY };
+        return;
+      }
       try { c.setPointerCapture(e.pointerId); } catch {}
       const p = this.#placement(f);
       g = {
@@ -145,11 +176,17 @@ export class Garden {
       if (!g) {
         if (e.pointerType === 'mouse') {
           this.hovered = this.flowerAt(e.clientX, e.clientY);
-          c.classList.toggle('over-flower', !!this.hovered);
+          this.hotPlace = this.hovered ? null : this.placeAt(e.clientX, e.clientY);
+          c.classList.toggle('over-flower', !!(this.hovered || this.hotPlace));
         }
         return;
       }
       if (e.pointerId !== g.id) return;
+      if (g.place) {
+        // places stay put: wandering off the press calls it off
+        if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) > 12) g.moved = true;
+        return;
+      }
       if (!g.moved && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) > 6) {
         g.moved = true;
         this.dragging = g.f;
@@ -160,8 +197,15 @@ export class Garden {
 
     const end = (e) => {
       if (!g || e.pointerId !== g.id) return;
-      const { f, moved } = g;
+      const { f, place, moved } = g;
       g = null;
+      if (place) {
+        if (moved || e.type !== 'pointerup') return;
+        this.hotPlace = null;
+        c.classList.remove('over-flower');
+        place.go();
+        return;
+      }
       if (!moved) {
         if (e.type === 'pointerup') this.onTend(f);
         return;
@@ -175,8 +219,10 @@ export class Garden {
     c.addEventListener('pointercancel', end);
 
     c.addEventListener('pointerleave', () => {
-      if (g) return;
+      if (g?.f) return;
+      g = null;
       this.hovered = null;
+      this.hotPlace = null;
       c.classList.remove('over-flower');
     });
   }
@@ -202,6 +248,9 @@ export class Garden {
 
     ctx.fillStyle = settings.background;
     ctx.fillRect(0, 0, w, h);
+
+    // the places at the back, far off behind the flowers
+    for (const p of this.places) p.draw(ctx, t, this.active && (p === this.hotPlace || p.focused), this.still);
 
     // the flower being dragged is drawn on top until it is set down
     const order = this.dragging ? [...this.flowers.filter((f) => f !== this.dragging), this.dragging] : this.flowers;

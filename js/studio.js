@@ -3,7 +3,6 @@ import { sprayStamp, sprayLine, bufferToImage } from './brush.js';
 import { settings, onSettings, randomColor, randomBrush } from './settings.js';
 import { drawStem } from './stems.js';
 import { sprayedEdge, randomSeed } from './noise.js';
-import { addGlow } from './glow.js';
 
 // The drawing sheet. Nobody chooses a colour or a brush: they are picked at
 // random from the dev-mode lists, once per drawing or anew for every stroke.
@@ -66,10 +65,10 @@ export class Studio {
     if (flower) this.#pickColorOnFlower();
     else this.#pickColor();
     this.#pickBrush();
-    this.plantBtn.textContent = flower ? 'replant' : 'plant';
+    this.plantBtn.setAttribute('aria-label', flower ? 'replant' : 'plant');
     // only a flower from the garden can be kept in the album
     this.keepBtn.hidden = !flower;
-    this.keepBtn.textContent = 'keep';
+    delete this.keepBtn.dataset.note;
     this.flight?.cancel();
     this.el.inert = false;
     this.el.classList.remove('flying');
@@ -166,12 +165,12 @@ export class Studio {
     this.onPlant(pixels, colors, f);
   }
 
-  // Put what's on the paper into the album. The flower in the garden goes on
-  // living as it was; the album keeps this copy.
+  // Put what's on the paper into the album. The flower is picked: it leaves
+  // the garden and lives on only in the album.
   #keep() {
     const { pixels, colors } = this.#compact();
-    if (!this.onKeep(pixels, colors)) {
-      this.keepBtn.textContent = 'album full'; // the browser refused to store more
+    if (!this.onKeep(pixels, colors, this.flower)) {
+      this.keepBtn.dataset.note = 'album full'; // the browser refused to store more
       return;
     }
     this.el.inert = true; // nothing to press while it flies
@@ -269,7 +268,6 @@ export class Studio {
     requestAnimationFrame(() => {
       this.dirty = false;
       bufferToImage(this.buf, this.img, this.rgb);
-      addGlow(this.img.data, ART, ART);
       this.ctx.putImageData(this.img, 0, 0);
       const empty = !this.buf.some((v) => v);
       // a new flower needs at least one stroke of its own (the stem alone isn't one);

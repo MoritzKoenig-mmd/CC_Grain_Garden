@@ -30,11 +30,16 @@
   <header class="mark">garden</header>
 
   <nav class="dock">
-    <button id="album-open" class="word" type="button" aria-label="open the album">album</button>
-    <button id="draw" class="word" type="button" aria-label="draw a flower">
-      <canvas class="dot" width="12" height="12"></canvas>
-      <span>draw</span>
-    </button>
+    <button id="album-open" class="word icon" type="button" aria-label="open the album"><i class="glyph"></i></button>
+    <button id="draw" class="word icon" type="button" aria-label="draw a flower"><i class="glyph"></i></button>
+  </nav>
+
+  <!-- the ways out of the garden: the garden draws the gate and the tree at the
+       back of it and takes the pointer for them (js/places.js); these buttons
+       sit invisibly over them so a keyboard can go too -->
+  <nav class="places" aria-label="ways out of the garden">
+    <button type="button" id="to-gate" class="place" aria-label="back out through the gate"></button>
+    <button type="button" id="to-tree" class="place" aria-label="go to the tree"></button>
   </nav>
 
   <div id="studio" hidden>
@@ -44,15 +49,15 @@
       </div>
 
       <div class="actions">
-        <button type="button" id="leave" class="word">leave</button>
+        <button type="button" id="leave" class="word icon" aria-label="leave"><i class="glyph"></i></button>
         <div class="tools">
           <button type="button" data-tool="erase" class="word tool">erase</button>
           <button type="button" data-tool="undo" class="word tool">undo</button>
           <button type="button" data-tool="clear" class="word tool">clear</button>
         </div>
         <div class="act-end">
-          <button type="button" id="keep" class="word" hidden>keep</button>
-          <button type="button" id="plant" class="word">plant</button>
+          <button type="button" id="keep" class="word icon" aria-label="keep in the album" hidden><i class="glyph"></i></button>
+          <button type="button" id="plant" class="word icon" aria-label="plant"><i class="glyph"></i></button>
         </div>
       </div>
     </div>
@@ -66,10 +71,40 @@
     </div>
 
     <div class="album-actions">
-      <button type="button" id="album-close" class="word">leave</button>
+      <button type="button" id="album-close" class="word icon" aria-label="leave"><i class="glyph"></i></button>
       <span class="album-count"></span>
     </div>
   </section>
+
+  <!-- the way in: the gate covers the garden until someone walks through the gap -->
+  <div id="intro" class="scene">
+    <canvas aria-hidden="true"></canvas>
+    <button type="button" class="door" aria-label="enter the garden"></button>
+  </div>
+
+  <!-- the tree at the back of the garden, a place of its own (js/tree.js): the
+       swing, and the note on it that says what all this is -->
+  <div id="tree" class="scene" hidden>
+    <canvas aria-hidden="true"></canvas>
+    <header class="mark">tree</header>
+    <div class="tree-ui">
+      <button type="button" class="note-btn" aria-label="read the note on the swing"></button>
+      <button type="button" class="way" aria-label="back to the garden"><span class="way-word" aria-hidden="true">garden</span></button>
+    </div>
+
+    <section class="reader" hidden role="dialog" aria-modal="true" aria-labelledby="note-title">
+      <div class="reader-inner">
+        <article class="reader-sheet">
+          <h2 id="note-title">hello, gardener</h2>
+          <p>this is a garden that only grows what people draw in it. press the pencil and spray a flower. you don't choose the colour or the brush: the garden picks them for you, a new colour with every stroke.</p>
+          <p>nothing here lasts. a planted flower withers, grain by grain, until it's gone. tend it, by opening it and drawing into what's left, and it starts over. or pick it: it goes into the album and stays the way it was.</p>
+          <p>the gate is the way in and out. the tree is just somewhere to sit for a bit.</p>
+          <p class="reader-sign">made in creative coding · HEAD – Genève</p>
+        </article>
+        <button type="button" class="reader-close word icon" aria-label="put the note back"><i class="glyph"></i></button>
+      </div>
+    </section>
+  </div>
 
   <aside id="dev" hidden aria-label="dev settings"></aside>
   <button id="dev-toggle" class="pill ghost" type="button" hidden>dev</button>

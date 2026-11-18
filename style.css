@@ -46,8 +46,9 @@ html, .word:disabled {
   cursor: -webkit-image-set(url("img/cursor-arrow.png") 1x, url("img/cursor-arrow@2x.png") 2x) 4 2, auto;
   cursor: image-set(url("img/cursor-arrow.png") 1x, url("img/cursor-arrow@2x.png") 2x) 4 2, auto;
 }
-/* anything you can press or pick up: the words, and flowers in the garden */
-.word, #garden.over-flower, #garden.dragging {
+/* anything you can press or pick up: the words, flowers and places in the
+   garden, the way in, the note on the swing and the way back from the tree */
+.word, #garden.over-flower, #garden.dragging, #intro .door, #tree .note-btn, #tree .way {
   cursor: url("img/cursor-hand.png") 16 16, pointer;
   cursor: -webkit-image-set(url("img/cursor-hand.png") 1x, url("img/cursor-hand@2x.png") 2x) 16 16, pointer;
   cursor: image-set(url("img/cursor-hand.png") 1x, url("img/cursor-hand@2x.png") 2x) 16 16, pointer;
@@ -95,6 +96,37 @@ button { font: inherit; color: inherit; }
 .word:focus-visible { outline: none; text-decoration: underline 2px; text-underline-offset: 6px; }
 html[data-dark="true"] .word { color: #f0ecff; }
 
+/* Sprayed pictures instead of words (img/icon-*.png, from _assets). Each
+   picture is a mask filled with the ink colour, so it follows the words,
+   dark mode included. They're sprayed already, so no spray filter. Each is
+   shown at exactly the size it was made for (80 px, or 52 px for the album's
+   X; twice that on sharp screens) so their grain stays crisp. */
+.word.icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  filter: none;
+}
+.glyph {
+  display: block;
+  width: 52px;
+  height: 52px;
+  background-color: currentColor;
+  -webkit-mask: var(--glyph) center / contain no-repeat;
+  mask: var(--glyph) center / contain no-repeat;
+}
+#album-close { --glyph: image-set(url("img/icon-x.png") 1x, url("img/icon-x@2x.png") 2x); }
+.dock .glyph, #studio .glyph { width: 80px; height: 80px; }
+#album-open { --glyph: image-set(url("img/icon-book-big.png") 1x, url("img/icon-book-big@2x.png") 2x); }
+#draw { --glyph: image-set(url("img/icon-pencil-big.png") 1x, url("img/icon-pencil-big@2x.png") 2x); }
+#leave { --glyph: image-set(url("img/icon-x-big.png") 1x, url("img/icon-x-big@2x.png") 2x); }
+#keep { --glyph: image-set(url("img/icon-book-big.png") 1x, url("img/icon-book-big@2x.png") 2x); }
+#plant { --glyph: image-set(url("img/icon-konev-big.png") 1x, url("img/icon-konev-big@2x.png") 2x); }
+.word.icon:focus-visible { text-decoration: none; box-shadow: inset 0 -2px 0 currentColor; }
+/* the browser wouldn't store another flower: said in words next to the book */
+.icon[data-note]::after { content: attr(data-note); font-size: 22px; filter: url(#spray); }
+
 /* the dev toggle keeps the plain pill look; it isn't part of the piece */
 .pill {
   display: inline-flex;
@@ -134,15 +166,6 @@ html[data-dark="true"] .word { color: #f0ecff; }
 body:has(#studio:not([hidden])) .dock,
 body:has(#album:not([hidden])) .dock { visibility: hidden; }
 
-#draw {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  filter: none; /* the dot is already sprayed; only the word gets the filter */
-}
-#draw span { filter: url(#spray); }
-#draw:focus-visible span { text-decoration: underline 2px; text-underline-offset: 6px; }
-#draw .dot { width: 24px; height: 24px; image-rendering: pixelated; }
 
 /* the album word hops when a flower has flown into it */
 #album-open.bump { animation: bump 700ms cubic-bezier(.3,1.6,.5,1) 80ms both; }
@@ -174,8 +197,8 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
 #studio.flying .actions { opacity: 0; transition: opacity 180ms ease; }
 
 .studio-inner {
-  /* the sheet keeps frame.png's proportions and leaves room for the words below */
-  --sheet: min(560px, calc(100vw - 32px), calc((100vh - 110px) * 252 / 282));
+  /* the sheet keeps frame.png's proportions and leaves room for the icons below */
+  --sheet: min(610px, calc(100vw - 32px), calc((100vh - 130px) * 252 / 282));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -345,10 +368,162 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
   color: #6f6a76;
   filter: url(#spray);
 }
-.kept-remove { font-size: 18px; color: var(--ink-mute); padding: 2px 8px; opacity: 0; }
-.kept-flower:hover .kept-remove,
-.kept-remove:focus-visible { opacity: 1; }
-@media (hover: none) { .kept-remove { opacity: 1; } }
+
+/* ---------- places ---------- */
+
+/* The gate and the tree are drawn by the garden's canvas, which takes the
+   pointer for them (js/places.js). Their buttons are only for keyboards and
+   screen readers: invisible, over the drawing, letting the pointer through.
+   Focused, the place itself shows it, as it does on hover. */
+.places { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+.place {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: none;
+}
+.place:focus-visible { outline: none; }
+
+/* The gate (js/intro.js) and the tree (js/tree.js) are places of their own,
+   laid over everything but the film grain and the dev panel while you're
+   there. Their paper is plain while they're all there; coming and going, it's
+   on the canvas, settling or lifting off in grains (js/scene.js). */
+.scene {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  background: #fff;
+}
+.scene canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.scene.withering { pointer-events: none; }
+/* words can't wither grain by grain, so they fade while the place comes and goes */
+.scene .mark, .scene .way-word { transition: opacity 360ms ease; }
+.scene:not(.here) .mark, .scene:not(.here) .way-word { opacity: 0; }
+
+/* ---------- the way in ---------- */
+/* the gap between the gate and the fence; JS puts it in place */
+#intro .door {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+/* the flowers coming up in the gap are its focus mark */
+#intro .door:focus-visible { outline: none; }
+
+/* ---------- the tree ---------- */
+
+#tree .tree-ui { position: absolute; inset: 0; pointer-events: none; }
+#tree .tree-ui > * { pointer-events: auto; }
+
+/* over the note on the swing seat; js/tree.js moves it along as the swing goes */
+#tree .note-btn {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+#tree .note-btn:focus-visible { outline: none; }
+/* while the note is open, the way back steps aside, as the dock does for the studio */
+#tree.reading .way { visibility: hidden; }
+
+/* the way back: the canvas draws the little sprout lying in its left part,
+   pointing left; the word sits after it */
+#tree .way {
+  position: absolute;
+  left: 10px;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  height: calc(var(--arrow-h, 56px) + 16px);
+  padding: 0 10px 0 calc(var(--arrow-w, 124px) + 20px);
+  border: 0;
+  background: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#tree .way:focus-visible { outline: none; }
+#tree .way-word {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+  filter: url(#spray);
+}
+#tree .way:focus-visible .way-word { text-decoration: underline 2px; text-underline-offset: 6px; }
+html[data-dark="true"] #tree .way-word { color: #f0ecff; }
+
+/* The note, opened out: a pop-up like the drawing sheet, on the same sprayed
+   paper, with the same X below it to put it back. */
+#tree .reader {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--veil);
+  animation: veil-in 220ms ease both;
+}
+#tree .reader.closing { animation: none; background-color: transparent; transition: background-color 360ms ease; }
+#tree .reader.closing .reader-close { opacity: 0; transition: opacity 160ms ease; }
+.reader-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+/* frame.png, stretched to fit the writing, its grain kept chunky */
+.reader-sheet {
+  width: min(540px, calc(100vw - 32px));
+  aspect-ratio: 252 / 282;
+  padding: 12% 12% 13%;
+  background: url("img/frame.png") center / 100% 100% no-repeat;
+  image-rendering: pixelated;
+  color: var(--ink);
+}
+.reader-sheet h2 {
+  margin: 0 0 16px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.15;
+  filter: url(#spray);
+}
+/* the writing is sprayed like every other word here: the same spray, at the
+   album's sizes, the signature in its label grey */
+.reader-sheet p {
+  margin: 0 0 10px;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  filter: url(#spray);
+}
+.reader-sheet .reader-sign {
+  margin: 16px 0 0;
+  font-size: 20px;
+  color: #6f6a76;
+}
+.reader-close { --glyph: image-set(url("img/icon-x-big.png") 1x, url("img/icon-x-big@2x.png") 2x); }
+.reader-close .glyph { width: 80px; height: 80px; }
+html[data-dark="true"] .reader-close { color: #f0ecff; }
+@media (max-width: 520px) {
+  .reader-sheet { padding: 17% 11% 19%; }
+  .reader-sheet h2 { font-size: 24px; }
+  .reader-sheet p { font-size: 20px; }
+  .reader-sheet .reader-sign { font-size: 18px; }
+}
 
 /* ---------- dev panel ---------- */
 
