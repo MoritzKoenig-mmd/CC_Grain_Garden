@@ -27,8 +27,6 @@
 
   <canvas id="garden" aria-label="the garden"></canvas>
 
-  <header class="mark">garden</header>
-
   <nav class="dock">
     <button id="album-open" class="word icon" type="button" aria-label="open the album"><i class="glyph"></i></button>
     <button id="draw" class="word icon" type="button" aria-label="draw a flower"><i class="glyph"></i></button>
@@ -86,10 +84,9 @@
        swing, and the note on it that says what all this is -->
   <div id="tree" class="scene" hidden>
     <canvas aria-hidden="true"></canvas>
-    <header class="mark">tree</header>
     <div class="tree-ui">
       <button type="button" class="note-btn" aria-label="read the note on the swing"></button>
-      <button type="button" class="way" aria-label="back to the garden"><span class="way-word" aria-hidden="true">garden</span></button>
+      <button type="button" class="way" aria-label="back to the garden"></button>
     </div>
 
     <section class="reader" hidden role="dialog" aria-modal="true" aria-labelledby="note-title">

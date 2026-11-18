@@ -7,7 +7,8 @@
 //   tree-small.png   the tree as it looks from the garden, far off, simplified
 //   swing-small.png  its little swing, on its own so it can swing
 //   gate-small.png   the gate as it looks from the garden
-//   arrow-small.png  a little sprout that comes up in that gate's gap
+//   sprout-small.png a little sprout that comes up in that gate's gap
+//   vine.png         the curly way back from the tree to the garden
 //
 // and the whole tree in one picture in _assets/tree.png.
 //
@@ -172,19 +173,26 @@ function handCloud(cx, cy, rx, ry, rand, { depth = 0.13, widths = [0.42, 0.82], 
 // laid on each other have the same margin, so their offsets don't change.
 const PAD = 8;
 
+// A drawing can also be made bigger or smaller (k) without its grain changing:
+// the shapes are drawn k times the size, with the same spray, the brush only
+// a little heavier or lighter (brush). Then (x, y) in the drawing is at
+// (x·k + PAD, y·k + PAD) in the PNG.
+//
 // brush.js works on square buffers, so each sheet is a square cropped on export.
 class Sheet {
-  constructor(w, h) {
+  constructor(w, h, { k = 1, brush = 1 } = {}) {
     this.pad = PAD;
-    this.w = w + 2 * PAD;
-    this.h = h + 2 * PAD;
+    this.k = k;
+    this.brush = brush;
+    this.w = Math.ceil(w * k) + 2 * PAD;
+    this.h = Math.ceil(h * k) + 2 * PAD;
     this.size = Math.max(this.w, this.h);
     this.buf = new Uint8Array(this.size * this.size);
     this.colors = [];
   }
 
   #in(pts) {
-    return pts.map(([x, y]) => [x + this.pad, y + this.pad]);
+    return pts.map(([x, y]) => [x * this.k + this.pad, y * this.k + this.pad]);
   }
 
   v(hex) {
@@ -197,6 +205,8 @@ class Sheet {
   // lifts a little at the ends; `to` thins (or fattens) it toward the end.
   draw(pts, r, hex, rand, { to = r, press = 0.2 } = {}) {
     pts = this.#in(pts);
+    r *= this.brush;
+    to *= this.brush;
     const v = this.v(hex);
     const p = drift(rand, 2 + rand() * 3);
     const n = pts.length - 1;
@@ -209,12 +219,13 @@ class Sheet {
   }
 
   stamp(x, y, r, hex, rand) {
-    sprayStamp(this.buf, this.size, x + this.pad, y + this.pad, r, this.v(hex), rand);
+    sprayStamp(this.buf, this.size, x * this.k + this.pad, y * this.k + this.pad, r * this.brush, this.v(hex), rand);
   }
 
   // Spray the inside of an outline solid (the outline closes itself).
   fill(poly, r, hex, rand) {
     poly = this.#in(poly);
+    r *= this.brush;
     const v = this.v(hex);
     const xs = poly.map((p) => p[0]);
     const ys = poly.map((p) => p[1]);
@@ -584,16 +595,16 @@ function note(rand) {
 
 // ---------- the landmarks seen from the garden ----------
 
-// The little swing hangs from the small tree's branch at SWING_SMALL_AT (the
-// same in the drawings and the PNGs), tied on 3 px down its drawing, 3 + PAD
-// down swing-small.png. The tree stands at row 150 of its drawing, 150 + PAD
-// of tree-small.png. js/places.js keeps the same numbers.
-export const TREE_SMALL = { w: 132, h: 152 };
+// The garden's tree is drawn k = 1.3 times its drawing's size (and its swing
+// with it), its gate k = 0.75 (see Sheet). js/places.js works out the same
+// spots from these numbers: the little swing hangs from the tree's branch at
+// SWING_SMALL_AT, tied on 3 px down its drawing; the tree stands at row 150.
+export const TREE_SMALL = { w: 132, h: 152, k: 1.3 };
 export const SWING_SMALL_AT = [23, 104];
 export const SWING_SMALL = { w: 34, h: 36 };
 
 function treeSmall(rand) {
-  const s = new Sheet(TREE_SMALL.w, TREE_SMALL.h);
+  const s = new Sheet(TREE_SMALL.w, TREE_SMALL.h, { k: TREE_SMALL.k, brush: 1.1 });
   s.draw(hand([[66, 150], [65, 122], [63, 92]], rand, { bow: 2 }), 6.4, GREEN, rand, { to: 4.4 });
   s.draw(hand([[72, 150], [70, 122], [68, 94]], rand, { bow: 2 }), 5, GREEN, rand, { to: 3.4 });
   // a little branch for the swing, flat where the ropes go
@@ -602,7 +613,7 @@ function treeSmall(rand) {
   s.draw(handCloud(66, 50, 44, 34, rand, { depth: 0.15, widths: [0.55, 1.05], tremble: 0.5 }), 4.2, GREEN, rand, { press: 0.25 });
   // fruit as dabs of colour, none the same size
   const spots = [[40, 38], [68, 26], [94, 44], [55, 62], [83, 68]];
-  const colors = [...FRUIT].sort(() => rand() - 0.5);
+  const colors = rainbow(spots, rand); // warm-leaning, like the big tree
   spots.forEach(([x, y], i) => {
     const r = 4.5 + rand() * 2.5;
     s.fill(handLoop(x + (rand() - 0.5) * 6, y + (rand() - 0.5) * 6, r, r * (0.8 + rand() * 0.4), rand() * TAU, rand, { lump: 0.25, over: 0 }), 3, colors[i], rand);
@@ -612,7 +623,7 @@ function treeSmall(rand) {
 }
 
 function swingSmall(rand) {
-  const s = new Sheet(SWING_SMALL.w, SWING_SMALL.h);
+  const s = new Sheet(SWING_SMALL.w, SWING_SMALL.h, { k: TREE_SMALL.k, brush: 1.1 });
   s.draw(hand([[7, 3], [6, 30]], rand, { bow: 0.8, tremble: 0.25 }), 1.6, BLUE, rand);
   s.draw(hand([[25, 3], [26, 30]], rand, { bow: 0.8, tremble: 0.25 }), 1.6, BLUE, rand);
   s.draw(hand([[2, 31], [16, 32], [31, 30]], rand, { bow: 0.8, over: 1.5 }), 2.6, BLUE, rand);
@@ -622,10 +633,10 @@ function swingSmall(rand) {
 // Where things are on the small gate's drawing; add PAD for gate-small.png,
 // which is what js/places.js counts in (hinge 112, gap 158–190, ground 104,
 // run 28–100).
-export const GATE_SMALL = { w: 214, h: 104, hinge: 104, gap: [150, 182], ground: 96, run: [20, 92] };
+export const GATE_SMALL = { w: 214, h: 104, k: 0.75, hinge: 104, gap: [150, 182], ground: 96, run: [20, 92] };
 
 function gateSmall(rand) {
-  const s = new Sheet(GATE_SMALL.w, GATE_SMALL.h);
+  const s = new Sheet(GATE_SMALL.w, GATE_SMALL.h, { k: GATE_SMALL.k, brush: 0.85 });
   // posts lean a little and aren't all as tall; the ones in the fence stay
   // clear of the columns where it's repeated (run), so the copies join up
   const post = (x, top, bottom, r = 4.2, lean = 2) =>
@@ -646,13 +657,56 @@ function gateSmall(rand) {
   return s;
 }
 
-function arrowSmall(rand) {
-  const s = new Sheet(28, 62);
+// The little sprout that comes up in the gap of the garden's gate (drawn
+// smaller there, k).
+function arrowSmall(rand, k = 1) {
+  const s = new Sheet(28, 62, { k, brush: k < 1 ? 0.85 : 1 });
   s.draw(hand([[14, 60], [11, 42], [15, 22], [14, 6]], rand, { bow: 1.5, tremble: 0.3 }), 2, BLUE, rand);
   s.draw(hand([[5, 15], [14, 5]], rand, { bow: 0.8, over: 1.5 }), 2, BLUE, rand);
   s.draw(hand([[14, 5], [23, 14]], rand, { bow: 0.8, over: 1.5 }), 2, BLUE, rand);
   s.draw(handLoop(7, 38, 5.5, 2.4, Math.PI + 0.6, rand, { lump: 0.2, over: 0.8, tremble: 0.2 }), 1.6, BLUE, rand);
   s.draw(handLoop(21, 28, 5.5, 2.4, -0.6, rand, { lump: 0.2, over: 0.8, tremble: 0.2 }), 1.6, BLUE, rand);
+  return s;
+}
+
+// The way back from the tree, drawn the way a five-year-old draws an arrow:
+// one long wobbly line coming up out of the bottom edge of the screen and
+// bending over to point left, to the garden, with a big lopsided V for a head
+// whose two strokes don't quite meet, one gone over twice, and two blobby
+// leaves stuck on the side. Thick and shaky, like a crayon pressed hard.
+// It comes out of the ground at row VINE.ground (the screen's bottom edge) and
+// runs on below it; js/tree.js keeps the same numbers.
+export const VINE = { w: 140, h: 96, ground: 78, foot: 124 };
+
+// A leaf the way a child draws one: out from the stem along one side, back
+// along the other, pointy where they meet, the two sides not the same.
+function leaf(s, [x, y], angle, length, width, rand) {
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
+  const side = (t, w) => [x + dx * length * t - dy * w * Math.sin(Math.PI * t), y + dy * length * t + dx * w * Math.sin(Math.PI * t)];
+  const out = [0, 0.25, 0.5, 0.75, 1].map((t) => side(t, width));
+  const back = [0.75, 0.5, 0.25, 0].map((t) => side(t, -width * (0.6 + rand() * 0.3)));
+  s.draw(hand([...out, ...back], rand, { bow: 1, tremble: 0.5, over: 1.5 }), 2.2, BLUE, rand);
+}
+
+function vine(rand) {
+  const s = new Sheet(VINE.w, VINE.h);
+  const j = () => (rand() - 0.5) * 4;
+  const shaky = { bow: 3.5, tremble: 0.9 };
+  // the stem: up out of the ground and over to the left, in one go
+  s.draw(hand([[VINE.foot, 96], [119, 72], [104, 55 + j()], [76, 45], [44, 41 + j()], [8, 39]], rand, shaky), 3.6, BLUE, rand, { to: 2.8, press: 0.25 });
+  // the head: too big, the top stroke longer than the bottom, neither quite
+  // reaching the tip, and the top one gone over again
+  const tip = [6, 39];
+  const top = [27 + j(), 17 + j()];
+  const bottom = [22 + j(), 57 + j()];
+  s.draw(hand([top, [tip[0] + 1, tip[1] - 2]], rand, { ...shaky, bow: 2, over: 3 }), 3.2, BLUE, rand);
+  s.draw(hand([[top[0] + 3, top[1] + 2], [tip[0] + 2, tip[1] - 1]], rand, { ...shaky, bow: 2.5 }), 2.6, BLUE, rand);
+  s.draw(hand([[tip[0] + 1, tip[1] + 2], bottom], rand, { ...shaky, bow: 2, over: 3 }), 3.2, BLUE, rand);
+  // two leaves sticking out, pointy at both ends, not the same: a fat one
+  // up off the top of the stem, a thin one down off the bottom
+  leaf(s, [60, 43], -1.05, 24, 8, rand);
+  leaf(s, [110, 61], 2.4, 20, 6.5, rand);
   return s;
 }
 
@@ -669,10 +723,12 @@ if (import.meta.main) {
   t.save('img/tree.png');
   sw.save('img/swing.png');
   nt.save('img/note.png');
-  treeSmall(rand).save('img/tree-small.png');
-  swingSmall(rand).save('img/swing-small.png');
-  gateSmall(rand).save('img/gate-small.png');
-  arrowSmall(rand).save('img/arrow-small.png');
+  // the landmarks each with their own dice, so changing one leaves the rest
+  treeSmall(mulberry32(SEED + 11)).save('img/tree-small.png');
+  swingSmall(mulberry32(SEED + 12)).save('img/swing-small.png');
+  gateSmall(mulberry32(SEED + 13)).save('img/gate-small.png');
+  arrowSmall(mulberry32(SEED + 15), GATE_SMALL.k).save('img/sprout-small.png');
+  vine(mulberry32(SEED + 16)).save('img/vine.png');
 
   // the whole thing in one picture
   const all = new Sheet(TREE.w, TREE.h);

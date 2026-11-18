@@ -1,7 +1,7 @@
 // The places you can go from the garden, drawn far off at the back of it,
 // behind the flowers: the gate you came in by, its fence running off the left
-// edge, and the tree in the top right corner, small and simple from here (the
-// close-up is js/tree.js). The garden draws them and takes the pointer for
+// edge, and the tree in the top right corner, running off the right edge,
+// simpler from here (the close-up is js/tree.js). The garden draws them and takes the pointer for
 // them, like it does for flowers: hovering one shows it can be pressed,
 // pressing it goes there. Each also has an invisible button over it, so a
 // keyboard can get there too.
@@ -11,7 +11,7 @@ import { loadPicture, runLeft } from './picture.js';
 // Where things stand, as a share of the screen's height: the gate high up at
 // the back, out of the flowers' way, and the tree. New flowers are planted in
 // front of both (garden.js).
-const GATE_LINE = 0.35;
+const GATE_LINE = 0.26;
 const TREE_LINE = 0.5;
 
 class Place {
@@ -31,22 +31,27 @@ class Place {
     return !!r && px >= r.x && py >= r.y && px <= r.x + r.w && py <= r.y + r.h;
   }
 
-  // The keyboard's button sits over what it's for, so a screen reader's
-  // outline lands in the right place too.
+  // The keyboard's button sits over what it's for (the part on screen), so a
+  // screen reader's outline lands in the right place too.
   placeButton() {
-    const { x, y, w, h } = this.rect;
-    Object.assign(this.button.style, { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` });
+    const r = this.rect;
+    const x0 = Math.max(0, r.x);
+    const x1 = Math.min(window.innerWidth, r.x + r.w);
+    Object.assign(this.button.style, { left: `${x0}px`, top: `${r.y}px`, width: `${x1 - x0}px`, height: `${r.h}px` });
   }
 }
 
 // ---------- the tree, far off ----------
 
-// In img/tree-small.png (the pictures have 8 px of empty paper all round):
-// where the tree stands, where its little swing hangs (the top left of
+// The pictures are drawn K times their drawings' size, with 8 px of empty
+// paper all round (tools/make-assets.mjs). In img/tree-small.png: where the
+// tree stands, where its little swing hangs (the top left of
 // img/swing-small.png) and how far down that the ropes are tied on.
-const FOOT = 158;
-const SWING_AT = [23, 104];
-const KNOT = 11;
+const K = 1.3;
+const FOOT = 150 * K + 8;
+const SWING_AT = [23 * K, 104 * K];
+const KNOT = 3 * K + 8;
+const SHOWN = 0.64; // how much of the picture is on screen; the rest runs off the right edge
 
 export class TreePlace extends Place {
   async load() {
@@ -60,10 +65,9 @@ export class TreePlace extends Place {
     const { pic } = this;
     const pw = pic.w * s;
     const ph = pic.h * s;
-    const m = Math.max(8, w * 0.04 - 8 * s); // its margin of paper counts toward the screen's
-    const ground = Math.max(m + FOOT * s, h * TREE_LINE);
+    const ground = Math.max(8 + FOOT * s, h * TREE_LINE);
     this.s = s;
-    this.at = { x: Math.round(w - m - pw), y: Math.round(ground - FOOT * s) };
+    this.at = { x: Math.round(w - pw * SHOWN), y: Math.round(ground - FOOT * s) };
     this.rect = { x: this.at.x, y: this.at.y, w: pw, h: ph };
     this.placeButton();
   }
@@ -92,16 +96,18 @@ export class TreePlace extends Place {
 
 // ---------- the gate, from the inside ----------
 
-// In img/gate-small.png's columns and rows (tools/make-assets.mjs draws it so).
-const HINGE = 112; // the last fence post, where the gate is hung
-const GAP = [158, 190]; // the open way out, between the gate and the far post
-const GROUND = 104; // where the posts stand
-const RUN = [28, 100]; // the fence is repeated from here to here, off to the left
-const SPROUT_FOOT = 68; // the bottom of the stem in img/arrow-small.png
+// In img/gate-small.png's columns and rows: drawn at G times its drawing's
+// size, with the same 8 px of paper (tools/make-assets.mjs draws it so).
+const G = 0.75;
+const HINGE = 104 * G + 8; // the last fence post, where the gate is hung
+const GAP = [150 * G + 8, 182 * G + 8]; // the open way out, between the gate and the far post
+const GROUND = 96 * G + 8; // where the posts stand
+const RUN = [20 * G + 8, 92 * G + 8]; // the fence is repeated from here to here, off to the left
+const SPROUT_FOOT = 60 * G + 8; // the bottom of the stem in img/sprout-small.png
 
 export class GatePlace extends Place {
   async load() {
-    [this.drawing, this.arrow] = await Promise.all([loadPicture('img/gate-small.png'), loadPicture('img/arrow-small.png')]);
+    [this.drawing, this.arrow] = await Promise.all([loadPicture('img/gate-small.png'), loadPicture('img/sprout-small.png')]);
   }
 
   layout(w, h, s) {
@@ -114,8 +120,8 @@ export class GatePlace extends Place {
       this.pic = runLeft(this.drawing, cut, turn, this.more);
     }
     const left = this.more - cut; // added columns, less the ones cut off
-    // high up at the back, but never under the "garden" word in the corner
-    const ground = Math.round(Math.max(h * GATE_LINE, 64 + (GROUND - 12) * s));
+    // high up at the back, but never off the top of the screen
+    const ground = Math.round(Math.max(h * GATE_LINE, 12 + GROUND * s));
     this.s = s;
     this.at = { x: hinge - (left + HINGE) * s, y: ground - GROUND * s };
     // pressable from the gate's hinge to the far post
