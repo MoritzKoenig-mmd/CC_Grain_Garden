@@ -3,12 +3,12 @@
 import { toNeon } from './config.js';
 
 const KEY = 'grain-garden/settings';
-const VERSION = 5;
+const VERSION = 6;
 
 export const DEFAULTS = {
   version: VERSION,
   background: '#ffffff',
-  grain: 0.1, // film grain overlay strength, 0..0.6
+  grain: 0, // film grain overlay strength, 0..0.6
   lifespanMin: 10, // minutes for an untended flower to wither away
   colorPer: 'stroke', // new random colour every 'stroke', or one per 'flower'
   brushPer: 'flower', // random brush size once per 'flower', or every 'stroke'
@@ -29,7 +29,7 @@ function migrate(saved) {
   if (['#b4b8e0', '#f3efe7'].includes(saved.background)) delete saved.background;
   delete saved.depthScale; // every flower is drawn at the same size now
   // the film grain was turned down; drop the old saved strength
-  if ((saved.version || 0) < 5) delete saved.grain;
+  if ((saved.version || 0) < 6) delete saved.grain;
   if ((saved.version || 0) < 4) {
     // the palette went neon
     if (Array.isArray(saved.colors)) saved.colors = toNeon(saved.colors);
