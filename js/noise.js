@@ -13,27 +13,30 @@ export function mulberry32(seed) {
 
 export const randomSeed = () => (Math.random() * 2 ** 32) >>> 0;
 
-// Smooth value noise on a lattice with the given cell size.
-function valueNoise(size, cell, rand) {
-  const g = Math.ceil(size / cell) + 2;
-  const lattice = new Float32Array(g * g);
+// Smooth value noise (w×h) on a lattice with the given cell size. A square one
+// draws the same numbers as before it took a height, so saved flowers keep
+// their pattern of decay.
+function valueNoise(w, h, cell, rand) {
+  const gx = Math.ceil(w / cell) + 2;
+  const gy = Math.ceil(h / cell) + 2;
+  const lattice = new Float32Array(gx * gy);
   for (let i = 0; i < lattice.length; i++) lattice[i] = rand();
-  const out = new Float32Array(size * size);
-  for (let y = 0; y < size; y++) {
+  const out = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
     const fy = y / cell;
     const y0 = Math.floor(fy);
     let ty = fy - y0;
     ty = ty * ty * (3 - 2 * ty);
-    for (let x = 0; x < size; x++) {
+    for (let x = 0; x < w; x++) {
       const fx = x / cell;
       const x0 = Math.floor(fx);
       let tx = fx - x0;
       tx = tx * tx * (3 - 2 * tx);
-      const a = lattice[y0 * g + x0];
-      const b = lattice[y0 * g + x0 + 1];
-      const c = lattice[(y0 + 1) * g + x0];
-      const d = lattice[(y0 + 1) * g + x0 + 1];
-      out[y * size + x] = a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty;
+      const a = lattice[y0 * gx + x0];
+      const b = lattice[y0 * gx + x0 + 1];
+      const c = lattice[(y0 + 1) * gx + x0];
+      const d = lattice[(y0 + 1) * gx + x0 + 1];
+      out[y * w + x] = a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty;
     }
   }
   return out;
@@ -45,7 +48,7 @@ function valueNoise(size, cell, rand) {
 // dissolving border is and `radius` how round its corners are (art px).
 export function sprayedEdge(size, seed, band = 22, radius = 30) {
   const rand = mulberry32(seed);
-  const wobble = valueNoise(size, 23, rand); // keeps the outline hand-sprayed, not geometric
+  const wobble = valueNoise(size, size, 23, rand); // keeps the outline hand-sprayed, not geometric
   const mask = new Uint8Array(size * size);
   const h = size / 2;
   for (let y = 0; y < size; y++) {
@@ -68,9 +71,9 @@ export function sprayedEdge(size, seed, band = 22, radius = 30) {
 // ~30% of the flower, and 1.0 erases all of it.
 export function makeWitherField(size, seed) {
   const rand = mulberry32(seed);
-  const n1 = valueNoise(size, 19, rand);
-  const n2 = valueNoise(size, 9, rand);
-  const n3 = valueNoise(size, 4, rand);
+  const n1 = valueNoise(size, size, 19, rand);
+  const n2 = valueNoise(size, size, 9, rand);
+  const n3 = valueNoise(size, size, 4, rand);
   const n = size * size;
   const raw = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -83,6 +86,46 @@ export function makeWitherField(size, seed) {
   for (let r = 0; r < n; r++) field[order[r]] = (r + 0.5) / n;
 
   // Two extra grain channels used for the drying edge.
+  const grainA = new Float32Array(n);
+  const grainB = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    grainA[i] = rand();
+    grainB[i] = rand();
+  }
+  return { field, grainA, grainB };
+}
+
+// The same kind of field for a picture of any size (w×h) in art px, like the
+// gate on the way in. Ranked through a fine histogram instead of a full sort,
+// which keeps big pictures quick.
+export function makeDissolveField(w, h, seed) {
+  const rand = mulberry32(seed);
+  const n1 = valueNoise(w, h, 19, rand);
+  const n2 = valueNoise(w, h, 9, rand);
+  const n3 = valueNoise(w, h, 4, rand);
+  const n = w * h;
+  const raw = new Float32Array(n);
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const v = 0.42 * n1[i] + 0.3 * n2[i] + 0.15 * n3[i] + 0.2 * rand();
+    raw[i] = v;
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  const BINS = 4096;
+  const k = (BINS - 1e-3) / (hi - lo || 1);
+  const count = new Uint32Array(BINS);
+  for (let i = 0; i < n; i++) count[Math.floor((raw[i] - lo) * k)]++;
+  const below = new Uint32Array(BINS);
+  for (let b = 1; b < BINS; b++) below[b] = below[b - 1] + count[b - 1];
+  const field = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const at = (raw[i] - lo) * k;
+    const b = Math.floor(at);
+    field[i] = (below[b] + (at - b) * count[b] + 0.5) / (n + 1);
+  }
+
   const grainA = new Float32Array(n);
   const grainB = new Float32Array(n);
   for (let i = 0; i < n; i++) {

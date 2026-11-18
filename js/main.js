@@ -1,12 +1,14 @@
-import { ART, toRgbTable } from './config.js';
+import { ART } from './config.js';
 import { Flower } from './flower.js';
 import { Garden } from './garden.js';
 import { Studio } from './studio.js';
 import { DevPanel } from './dev.js';
 import { Album } from './album.js';
-import { sprayStamp, bufferToImage } from './brush.js';
+import { Intro } from './intro.js';
+import { TreeScene } from './tree.js';
+import { TreePlace, GatePlace } from './places.js';
 import { seedFlowers } from './seed.js';
-import { settings, onSettings, lifespanMs, randomColor } from './settings.js';
+import { settings, onSettings, lifespanMs } from './settings.js';
 import * as store from './store.js';
 
 // ---------- static film grain ----------
@@ -30,17 +32,6 @@ function grainTile(dark) {
 }
 const GRAIN = { light: grainTile(true), dark: grainTile(false) };
 
-// ---------- grainy dot on the draw button, in a colour from the hat ----------
-function drawDot() {
-  const c = document.querySelector('#draw .dot');
-  const buf = new Uint8Array(c.width * c.height);
-  for (let i = 0; i < 3; i++) sprayStamp(buf, c.width, 5.5, 5.5, 4.2, 1);
-  const ctx = c.getContext('2d');
-  const img = ctx.createImageData(c.width, c.height);
-  bufferToImage(buf, img, toRgbTable([randomColor()]));
-  ctx.putImageData(img, 0, 0);
-}
-
 // ---------- page-level settings ----------
 function applyLook() {
   document.querySelector(".grain").style.opacity = String(settings.grain);
@@ -61,16 +52,15 @@ const garden = new Garden(document.getElementById('garden'), {
   onTend(flower) {
     const now = Date.now();
     flower.pause(now); // tending holds back the withering
-    garden.active = false;
     studio.open(flower, flower.remaining(now));
+    settle();
   },
   onChange: save,
 });
 
 const studio = new Studio({
   onPlant(pixels, colors, flower) {
-    garden.active = true;
-    drawDot();
+    settle();
     if (!flower) {
       garden.plant(pixels, colors);
       return;
@@ -83,24 +73,22 @@ const studio = new Studio({
     save();
   },
   onLeave(flower) {
-    garden.active = true;
+    settle();
     if (flower) flower.resume(Date.now());
   },
-  onKeep: (pixels, colors) => album.add(pixels, colors),
+  // keeping a flower picks it: into the album, out of the garden
+  onKeep(pixels, colors, flower) {
+    if (!album.add(pixels, colors)) return false;
+    garden.remove(flower);
+    return true;
+  },
 });
 
-const album = new Album({
-  onOpen() {
-    garden.active = false;
-  },
-  onClose() {
-    garden.active = true;
-  },
-});
+const album = new Album({ onOpen: () => settle(), onClose: () => settle() });
 
 document.getElementById('draw').addEventListener('click', () => {
-  garden.active = false;
   studio.open(null);
+  settle();
 });
 
 let records = store.load(ART * ART);
@@ -126,21 +114,71 @@ onSettings(() => {
 });
 
 applyLook();
-drawDot();
 new DevPanel();
 
 // keep the stored state fresh if the tab is closed mid-tend
 window.addEventListener('pagehide', save);
 
-// /#draw opens straight into the studio, /#album into the album
-if (location.hash === '#draw') {
-  garden.active = false;
-  studio.open(null);
-} else if (location.hash === '#album') {
-  album.open();
+// ---------- the world ----------
+
+// Three places, joined up: the gate (the way in), the garden, and the tree at
+// the back of it. The gate and the tree are laid over the garden, growing in
+// when you go to them and withering away when you leave (scene.js). Each place
+// has its own address, so the browser's back and forward walk between them:
+// the gate is the bare address, the others are #garden and #tree. /#draw opens
+// straight into the studio and /#album into the album, both in the garden.
+
+const dock = document.querySelector('.dock');
+const ways = document.querySelector('.places');
+
+const intro = new Intro(document.getElementById('intro'), { onEnter: () => go('garden') });
+const tree = new TreeScene(document.getElementById('tree'), { onBack: () => go('garden') });
+const scenes = { gate: intro, tree };
+
+const toTree = new TreePlace(document.getElementById('to-tree'), () => go('tree'));
+const toGate = new GatePlace(document.getElementById('to-gate'), () => go('gate'));
+for (const place of [toTree, toGate]) place.ready.then(() => garden.addPlace(place), () => {});
+
+const placeOf = (hash) => (hash === '#tree' ? 'tree' : ['#garden', '#draw', '#album'].includes(hash) ? 'garden' : 'gate');
+const addressOf = (place) => (place === 'gate' ? location.pathname + location.search : `#${place}`);
+
+let here = placeOf(location.hash);
+
+// The garden only answers when it's the place you're in and nothing's open on it.
+function settle() {
+  const inGarden = here === 'garden';
+  garden.active = inGarden && !studio.isOpen && !album.isOpen;
+  dock.inert = !inGarden;
+  ways.inert = !inGarden;
 }
+
+function go(place, { remember = true } = {}) {
+  if (place === here) return;
+  const from = here;
+  here = place;
+  if (remember) history.pushState(null, '', addressOf(place));
+  for (const [name, scene] of Object.entries(scenes)) {
+    if (name === place) scene.show();
+    else scene.hide();
+  }
+  settle();
+  // back in the garden by keyboard: carry on from the way you went out
+  if (place === 'garden') ({ tree: toTree, gate: toGate })[from]?.button.focus({ preventScroll: true });
+}
+
+window.addEventListener('popstate', () => go(placeOf(location.hash), { remember: false }));
+
+// where this visit starts
+for (const [name, scene] of Object.entries(scenes)) {
+  if (name === here) scene.show({ instant: true });
+  else scene.hide({ instant: true });
+}
+if (location.hash === '#draw') studio.open(null);
+else if (location.hash === '#album') album.open();
+settle();
 
 // handy for poking at the garden from the console
 window.__garden = garden;
 window.__studio = studio;
 window.__album = album;
+window.__go = go;
