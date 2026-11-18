@@ -60,19 +60,6 @@ html, .word:disabled {
   cursor: image-set(url("img/cursor-draw.png") 1x, url("img/cursor-draw@2x.png") 2x) 16 16, crosshair;
 }
 
-.mark {
-  position: fixed;
-  top: max(12px, env(safe-area-inset-top));
-  left: 18px;
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--ink-mute);
-  filter: url(#spray);
-  pointer-events: none;
-  user-select: none;
-}
-html[data-dark="true"] .mark { color: #a9a4b8; }
-
 /* ---------- buttons ---------- */
 
 button { font: inherit; color: inherit; }
@@ -298,10 +285,6 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
   pointer-events: none;
 }
 .album-actions > * { pointer-events: auto; }
-/* on narrow screens the stream covers the garden label; don't let a sliver peek out */
-@media (max-width: 700px) {
-  body:has(#album:not([hidden])) > .mark { visibility: hidden; }
-}
 
 .stream-title {
   margin: 0 0 28px;
@@ -403,9 +386,6 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
   display: block;
 }
 .scene.withering { pointer-events: none; }
-/* words can't wither grain by grain, so they fade while the place comes and goes */
-.scene .mark, .scene .way-word { transition: opacity 360ms ease; }
-.scene:not(.here) .mark, .scene:not(.here) .way-word { opacity: 0; }
 
 /* ---------- the way in ---------- */
 /* the gap between the gate and the fence; JS puts it in place */
@@ -438,30 +418,18 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
 /* while the note is open, the way back steps aside, as the dock does for the studio */
 #tree.reading .way { visibility: hidden; }
 
-/* the way back: the canvas draws the little sprout lying in its left part,
-   pointing left; the word sits after it */
+/* the way back: over the curly vine the canvas draws coming up out of the
+   bottom edge (js/tree.js puts it in place); it sways more when wanted, which
+   is also its focus mark */
 #tree .way {
   position: absolute;
-  left: 10px;
-  bottom: max(10px, env(safe-area-inset-bottom));
-  display: flex;
-  align-items: center;
-  height: calc(var(--arrow-h, 56px) + 16px);
-  padding: 0 10px 0 calc(var(--arrow-w, 124px) + 20px);
+  padding: 0;
   border: 0;
   background: none;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 #tree .way:focus-visible { outline: none; }
-#tree .way-word {
-  font-size: 32px;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--ink);
-  filter: url(#spray);
-}
-#tree .way:focus-visible .way-word { text-decoration: underline 2px; text-underline-offset: 6px; }
-html[data-dark="true"] #tree .way-word { color: #f0ecff; }
 
 /* The note, opened out: a pop-up like the drawing sheet, on the same sprayed
    paper, with the same X below it to put it back. */

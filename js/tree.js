@@ -2,8 +2,8 @@
 // A big sprayed tree full of funny fruit (img/tree.png, sprayed by
 // tools/make-assets.mjs), with a swing hanging off its lowest branch and a note
 // left on the seat. Pressing the note takes it off the swing and opens it: it
-// says what this garden is. The little arrow in the corner leads back to the
-// garden. Like the gate, the whole place grows in over the garden and withers
+// says what this garden is. The curly vine coming up out of the bottom edge
+// points the way back to the garden. Like the gate, the whole place grows in over the garden and withers
 // away again when you leave (see scene.js).
 
 import { artScale } from './config.js';
@@ -16,6 +16,11 @@ const TREE = [376, 400]; // img/tree.png
 const SWING_AT = [48, 228]; // top left of img/swing.png on the tree
 const KNOT = 11; // how far down swing.png the ropes are tied to the branch: it swings from there
 const NOTE_AT = [30, 58]; // top left of img/note.png on the swing
+// img/vine.png: where it comes out of the ground (the screen's bottom edge),
+// its stem's foot there, and the tip of its arrowhead
+const VINE_GROUND = 86;
+const VINE_FOOT = 132;
+const VINE_TIP = 14;
 
 export class TreeScene extends Scene {
   constructor(root, { onBack }) {
@@ -34,16 +39,16 @@ export class TreeScene extends Scene {
   }
 
   async loadPictures() {
-    [this.tree, this.swing, this.note, this.arrow] = await Promise.all([
+    [this.tree, this.swing, this.note, this.vine] = await Promise.all([
       loadPicture('img/tree.png'),
       loadPicture('img/swing.png'),
       loadPicture('img/note.png'),
-      loadPicture('img/arrow-small.png'),
+      loadPicture('img/vine.png'),
     ]);
   }
 
   get pieces() {
-    return [this.tree, this.swing, this.note, this.arrow];
+    return [this.tree, this.swing, this.note, this.vine];
   }
 
   #bind() {
@@ -173,11 +178,19 @@ export class TreeScene extends Scene {
       height: `${this.noteBox.h + 2 * pad}px`,
     });
 
-    // the way back: the little sprout lying down in the bottom corner, pointing left
-    const arrow = this.arrow;
-    this.wayBox = { w: arrow.h * s, h: arrow.w * s };
-    this.way.style.setProperty('--arrow-w', `${this.wayBox.w}px`);
-    this.way.style.setProperty('--arrow-h', `${this.wayBox.h}px`);
+    // the way back: the vine comes up out of the bottom edge (the rest of it
+    // is below the screen), its head near the left edge
+    const vine = this.vine;
+    const left = Math.round(Math.max(12, w * 0.02) - VINE_TIP * s);
+    const top = Math.round(h - VINE_GROUND * s);
+    this.vineAt = { left, top, foot: { x: Math.round(left + VINE_FOOT * s), y: h } };
+    const x0 = Math.max(0, left + 4 * s);
+    Object.assign(this.way.style, {
+      left: `${x0}px`,
+      top: `${top + 4 * s}px`,
+      width: `${Math.min(w, left + (vine.w - 4) * s) - x0}px`,
+      height: `${h - top - 4 * s}px`,
+    });
   }
 
   // ---------- frames ----------
@@ -201,17 +214,16 @@ export class TreeScene extends Scene {
     // its button goes along with it
     this.noteBtn.style.translate = `${Math.round(sway * (this.noteBox.y + this.noteBox.h / 2))}px 0`;
 
-    // the sprout pointing back to the garden, wagging when wanted (and out of
-    // the way while the note's open)
+    // the vine pointing back to the garden, swaying from where it comes out
+    // of the ground, more when wanted (and out of the way while the note's open)
     if (this.reading) return;
-    const r = this.way.getBoundingClientRect();
-    const wag = this.hover.way && !this.still ? Math.sin(t * 7) * 0.08 : 0;
-    const { w, h } = this.wayBox;
+    const amp = this.still ? 0 : this.hover.way ? 0.07 : 0.015;
+    const lean = Math.sin(t * (this.hover.way ? 2.4 : 0.8)) * amp;
+    const { foot } = this.vineAt;
     ctx.save();
-    ctx.translate(Math.round(r.left + 8 + w), Math.round(r.top + r.height / 2));
-    ctx.rotate(-Math.PI / 2); // up becomes left; its foot is now on the right
-    ctx.transform(1, 0, wag, 1, 0, 0);
-    ctx.drawImage(this.arrow.canvas, Math.round(-h / 2), Math.round(-w), h, w);
+    ctx.translate(foot.x, foot.y);
+    ctx.transform(1, 0, lean, 1, 0, 0);
+    ctx.drawImage(this.vine.canvas, Math.round(-VINE_FOOT * s), Math.round(-VINE_GROUND * s), this.vine.w * s, this.vine.h * s);
     ctx.restore();
   }
 }
