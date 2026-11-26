@@ -134,8 +134,8 @@ export class Garden {
       const f = this.flowers[i];
       const { x, y, s } = this.#placement(f);
       const lx = (px - x) / s + f.box.cx;
-      const ly = (py - y) / s + f.box.bottom;
-      if (lx < -4 || ly < -4 || lx > ART + 4 || ly > ART + 4) continue;
+      const ly = (py - y) / s + f.box.bottom + f.lift;
+      if (lx < -4 || ly < -4 || lx > ART + 4 || ly > f.box.bottom + f.lift + 4) continue;
       if (f.hitTest(lx, ly)) return f;
     }
     return null;
@@ -207,7 +207,8 @@ export class Garden {
         return;
       }
       if (!moved) {
-        if (e.type === 'pointerup') this.onTend(f);
+        // a flower whose stem has begun to go is past saving
+        if (e.type === 'pointerup' && f.canTend(Date.now())) this.onTend(f);
         return;
       }
       this.dragging = null;
@@ -267,7 +268,9 @@ export class Garden {
       ctx.save();
       ctx.translate(Math.round(x), Math.round(y));
       ctx.transform(1, 0, shear, 1, 0, 0);
-      ctx.drawImage(f.canvas, -f.box.cx * s, -f.box.bottom * s, ART * s, ART * s);
+      // the grown stem first, so it shows through the grain at the paper's edge
+      if (f.stem) ctx.drawImage(f.stem.canvas, -f.box.cx * s, -f.stem.h * s, ART * s, f.stem.h * s);
+      ctx.drawImage(f.canvas, -f.box.cx * s, -(f.box.bottom + f.lift) * s, ART * s, ART * s);
       ctx.restore();
     }
 

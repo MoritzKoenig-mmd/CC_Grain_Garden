@@ -12,10 +12,6 @@ export const artScale = (w, h) => 1.9 * Math.min(1.3, Math.max(0.5, Math.min(h /
 // Width of the "drying" edge in front of the erosion (0..1 of the noise range).
 export const DRY_BAND = 0.08;
 
-// A flower withers slowly until this much of it is gone, then falls apart
-// over the last COLLAPSE_MS of its lifespan.
-export const COLLAPSE_AT = 0.7;
-export const COLLAPSE_MS = 3000;
 
 export const DUST = [146, 124, 100];
 export const ASH = [228, 218, 200];

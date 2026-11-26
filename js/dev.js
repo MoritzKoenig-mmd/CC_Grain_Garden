@@ -76,6 +76,24 @@ export class DevPanel {
     const rerender = () => this.render();
 
     const life = el('output', { class: 'dev-value' }, humanTime(s.lifespanMin));
+    const pctLeft = (f) => `${Math.round(f * 100)}% left`;
+    const secs = (ms) => `${(ms / 1000).toFixed(1)} s`;
+    const fastAt = el('output', { class: 'dev-value' }, pctLeft(s.fastAt));
+    const fastMs = el('output', { class: 'dev-value' }, secs(s.fastMs));
+    const stemMs = el('output', { class: 'dev-value' }, secs(s.stemMs));
+    const px = (v) => `${v} px`;
+    const beeSize = el('output', { class: 'dev-value' }, px(s.beeSize));
+    const beeOffset = el('output', { class: 'dev-value' }, px(s.beeOffset));
+    const beeSmooth = el('output', { class: 'dev-value' }, s.beeSmooth ? `${s.beeSmooth.toFixed(2)} s` : 'off');
+    // a slider row for one of the withering settings, showing its value in `out`
+    const slider = (label, title, attrs, value, out, onset) =>
+      el(
+        'label',
+        { class: 'dev-row', title },
+        el('span', { class: 'dev-label' }, label),
+        el('input', { type: 'range', ...attrs, value, 'aria-label': title, oninput: (e) => onset(Number(e.target.value)) }),
+        out,
+      );
 
     const colors = s.colors.map((hex, i) =>
       el(
@@ -217,6 +235,37 @@ export class DevPanel {
       el(
         'section',
         {},
+        el('h3', {}, 'bee'),
+        slider('size', 'how wide the bee is', { min: 16, max: 160, step: 1 }, s.beeSize, beeSize, (v) => {
+          update({ beeSize: v });
+          beeSize.textContent = px(v);
+        }),
+        el(
+          'label',
+          { class: 'dev-check' },
+          el('input', {
+            type: 'checkbox',
+            checked: s.beeFollow,
+            onchange: (e) => {
+              update({ beeFollow: e.target.checked });
+              rerender();
+            },
+          }),
+          'follow the trail of the mouse',
+        ),
+        slider('offset', 'how far behind the mouse, along its trail, the bee flies', { min: 0, max: 400, step: 1, disabled: !s.beeFollow }, s.beeOffset, beeOffset, (v) => {
+          update({ beeOffset: v });
+          beeOffset.textContent = px(v);
+        }),
+        slider('smoothing', 'how long the bee takes to catch up with its spot on the trail', { min: 0, max: 100, step: 1, disabled: !s.beeFollow }, Math.round(s.beeSmooth * 100), beeSmooth, (v) => {
+          update({ beeSmooth: v / 100 });
+          beeSmooth.textContent = v ? `${(v / 100).toFixed(2)} s` : 'off';
+        }),
+      ),
+
+      el(
+        'section',
+        {},
         el('h3', {}, 'withering'),
         el(
           'label',
@@ -236,6 +285,18 @@ export class DevPanel {
           }),
           life,
         ),
+        slider('speed up at', 'the petals speed up when this much of them is left', { min: 0, max: 50, step: 1 }, Math.round(s.fastAt * 100), fastAt, (v) => {
+          update({ fastAt: v / 100 });
+          fastAt.textContent = pctLeft(v / 100);
+        }),
+        slider('last petals', 'how long the last petals take once they speed up', { min: 200, max: 10000, step: 100 }, s.fastMs, fastMs, (v) => {
+          update({ fastMs: v });
+          fastMs.textContent = secs(v);
+        }),
+        slider('stem', 'how long the stem takes to wither once the petals are gone', { min: 200, max: 10000, step: 100 }, s.stemMs, stemMs, (v) => {
+          update({ stemMs: v });
+          stemMs.textContent = secs(v);
+        }),
       ),
 
       el(

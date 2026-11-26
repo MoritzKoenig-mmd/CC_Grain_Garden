@@ -1,8 +1,17 @@
 import { ART, toRgbTable } from './config.js';
 import { sprayStamp, sprayLine, bufferToImage } from './brush.js';
-import { settings, onSettings, randomColor, randomBrush } from './settings.js';
+import { settings, onSettings, randomColor, randomBrush, isStemColor } from './settings.js';
 import { drawStem } from './stems.js';
-import { sprayedEdge, randomSeed } from './noise.js';
+import { sprayedEdge, paperEdge, randomSeed } from './noise.js';
+
+// The sheet is img/frame.png stretched over .sheet (FRAME_W × FRAME_H of its
+// px). The drawing is a square on it, in frame px, as tall as the paper's
+// sprayed edge reaches (it spills past the frame's sides, where there is no
+// paper and so no paint), so paint can go right up to the paper's edge.
+const FRAME_SRC = 'img/frame.png';
+const FRAME_W = 252;
+const FRAME_H = 282;
+const PAPER = { x: -10, y: 5, size: 272 };
 
 // The drawing sheet. Nobody chooses a colour or a brush: they are picked at
 // random from the dev-mode lists, once per drawing or anew for every stroke.
@@ -27,6 +36,14 @@ export class Studio {
     this.sheet = this.el.querySelector('.sheet');
     this.eraseBtn = this.el.querySelector('[data-tool="erase"]');
 
+    Object.assign(this.paper.style, {
+      left: `${(PAPER.x / FRAME_W) * 100}%`,
+      top: `${(PAPER.y / FRAME_H) * 100}%`,
+      width: `${(PAPER.size / FRAME_W) * 100}%`,
+    });
+    this.cover = null; // how much of each art px lies on the paper, once measured
+    this.#measurePaper().catch(() => {}); // until then, the generic grainy square
+
     this.#bindPaper();
     this.#bindButtons();
     this.#applyTools();
@@ -48,8 +65,9 @@ export class Studio {
   open(flower, pixels) {
     this.flower = flower;
     this.buf = pixels ? new Uint8Array(pixels) : new Uint8Array(ART * ART);
-    // every drawing gets its own grainy border, so no two edges match
-    this.stencil = sprayedEdge(ART, randomSeed());
+    // paint ends where the paper does; every drawing gets its own grain along
+    // that edge, so no two edges match
+    this.stencil = this.cover ? paperEdge(this.cover, randomSeed()) : sprayedEdge(ART, randomSeed());
     this.colors = flower ? [...flower.colors] : [];
     this.rgb = toRgbTable(this.colors);
     this.history = [];
@@ -100,9 +118,9 @@ export class Studio {
 
   // Tending a flower: the first stroke carries on in one of the colours still
   // on it (not ones that have withered away), so a blue flower with a green
-  // stem starts with blue or green.
+  // stem starts with blue (the stem's colour is kept for the stem).
   #pickColorOnFlower() {
-    const present = [...new Set(this.buf)].filter((v) => v);
+    const present = [...new Set(this.buf)].filter((v) => v && !isStemColor(this.colors[v - 1]));
     if (!present.length) return this.#pickColor();
     this.value = present[Math.floor(Math.random() * present.length)];
     this.hex = this.colors[this.value - 1];
@@ -208,6 +226,44 @@ export class Studio {
   }
 
   // ---------- drawing ----------
+
+  // Read the frame's alpha and work out, for every art px, how much of it
+  // lies on the paper (4×4 samples each), so the stencil can follow its edge.
+  async #measurePaper() {
+    const im = new Image();
+    im.src = FRAME_SRC;
+    await im.decode();
+    const w = im.naturalWidth;
+    const h = im.naturalHeight;
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(im, 0, 0);
+    const alpha = ctx.getImageData(0, 0, w, h).data;
+    // frame px per art px, in case frame.png is ever saved at another size
+    const kx = (PAPER.size / ART) * (w / FRAME_W);
+    const ky = (PAPER.size / ART) * (h / FRAME_H);
+    const ox = PAPER.x * (w / FRAME_W);
+    const oy = PAPER.y * (h / FRAME_H);
+    const N = 4;
+    const cover = new Float32Array(ART * ART);
+    for (let y = 0; y < ART; y++) {
+      for (let x = 0; x < ART; x++) {
+        let on = 0;
+        for (let sy = 0; sy < N; sy++) {
+          const fy = Math.floor(oy + (y + (sy + 0.5) / N) * ky);
+          if (fy < 0 || fy >= h) continue;
+          for (let sx = 0; sx < N; sx++) {
+            const fx = Math.floor(ox + (x + (sx + 0.5) / N) * kx);
+            if (fx >= 0 && fx < w && alpha[(fy * w + fx) * 4 + 3] > 127) on++;
+          }
+        }
+        cover[y * ART + x] = on / (N * N);
+      }
+    }
+    this.cover = cover;
+  }
 
   // Paint only lands where the stencil allows: the edge dissolves into grain.
   #clip() {

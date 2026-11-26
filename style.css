@@ -60,6 +60,23 @@ html, .word:disabled {
   cursor: image-set(url("img/cursor-draw.png") 1x, url("img/cursor-draw@2x.png") 2x) 16 16, crosshair;
 }
 
+/* The bee (js/bee.js). When it is the cursor, the browser's own is hidden
+   everywhere but the drawing sheet, where the crosshair takes over again. When
+   it follows the pointer's trail instead, the arrow and hand above stay on. */
+html.bee-cursor, html.bee-cursor *:not(#paper) { cursor: none !important; }
+.bee {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+  display: none;
+  will-change: transform;
+}
+.bee.shown { display: block; }
+
 /* ---------- buttons ---------- */
 
 button { font: inherit; color: inherit; }
@@ -204,15 +221,11 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
   image-rendering: pixelated;
 }
 
-/* The drawing sits on the frame's white middle (the largest clean square in
-   frame.png is ~206 of its 252 px, centred a little above half). It may be a
-   touch bigger than that: its own outer band is a grainy fade (see
-   sprayedEdge in noise.js), so paint thins out before the frame does. */
+/* The drawing is a square as tall as the frame's paper, spilling past its
+   sides; js/studio.js places it (PAPER) and keeps paint to where the paper is
+   (paperEdge in noise.js), so paint goes right up to the paper's edge. */
 #paper {
   position: absolute;
-  left: 7%;
-  top: 10.5%;
-  width: 86%;
   height: auto;
   aspect-ratio: 1;
   image-rendering: pixelated;

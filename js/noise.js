@@ -66,6 +66,21 @@ export function sprayedEdge(size, seed, band = 22, radius = 30) {
   return mask;
 }
 
+// A stencil that follows a sprayed sheet of paper: `cover` says how much of
+// each art px lies on the paper (0..1). Paint lands where the paper is, and
+// where the paper's own edge breaks up into grain the stencil does too, drawn
+// afresh from `seed` so no two edges match.
+export function paperEdge(cover, seed) {
+  const rand = mulberry32(seed);
+  const mask = new Uint8Array(cover.length);
+  for (let i = 0; i < cover.length; i++) {
+    let t = Math.min(1, Math.max(0, (cover[i] - 0.25) / 0.5));
+    t = t * t * (3 - 2 * t);
+    mask[i] = rand() < t ? 1 : 0;
+  }
+  return mask;
+}
+
 // The wither field: layered noise plus per-pixel grain, then rank-normalised so
 // values are uniformly spread over 0..1. That way a wither level of 0.3 erases
 // ~30% of the flower, and 1.0 erases all of it.

@@ -3,13 +3,20 @@
 import { toNeon } from './config.js';
 
 const KEY = 'grain-garden/settings';
-const VERSION = 6;
+const VERSION = 7;
 
 export const DEFAULTS = {
   version: VERSION,
   background: '#ffffff',
   grain: 0, // film grain overlay strength, 0..0.6
   lifespanMin: 10, // minutes for an untended flower to wither away
+  // The petals wither first, slowly, until only fastAt (0..1) of them is left;
+  // that last bit goes quickly, in fastMs. The stem stays fresh all the while,
+  // and once the petals are gone it withers in stemMs. From then on the flower
+  // is past saving: it can't be opened and redrawn any more.
+  fastAt: 0.1,
+  fastMs: 3000,
+  stemMs: 3000,
   colorPer: 'stroke', // new random colour every 'stroke', or one per 'flower'
   brushPer: 'flower', // random brush size once per 'flower', or every 'stroke'
   // neon: saturated enough to shine, deep enough to hold up on white
@@ -18,6 +25,10 @@ export const DEFAULTS = {
   stems: true, // new drawings start with one of the predefined stems
   stemColor: '#00e65c',
   tools: { erase: false, undo: false, clear: false }, // which studio tools are shown
+  beeSize: 44, // width of the bee cursor in screen px
+  beeFollow: true, // the bee flies along the pointer's trail instead of being the pointer
+  beeOffset: 70, // how far behind the pointer, along its trail, the following bee flies (px)
+  beeSmooth: 0.18, // how long the following bee takes to catch up (s); 0 is no smoothing
 };
 
 const BLACK = '#161418';
@@ -28,8 +39,15 @@ function migrate(saved) {
   // old lavender and off-white defaults
   if (['#b4b8e0', '#f3efe7'].includes(saved.background)) delete saved.background;
   delete saved.depthScale; // every flower is drawn at the same size now
+  delete saved.stemWitherAt; // the stem now waits for the petals (fastAt, fastMs, stemMs)
+  delete saved.stemAfterMs;
   // the film grain was turned down; drop the old saved strength
   if ((saved.version || 0) < 6) delete saved.grain;
+  // the bee follows the pointer by default now, a little further back
+  if ((saved.version || 0) < 7) {
+    delete saved.beeFollow;
+    delete saved.beeOffset;
+  }
   if ((saved.version || 0) < 4) {
     // the palette went neon
     if (Array.isArray(saved.colors)) saved.colors = toNeon(saved.colors);
@@ -77,9 +95,16 @@ export const lifespanMs = () => Math.max(0.05, settings.lifespanMin) * 60 * 1000
 
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
-// A random colour, never the same as `previous` when there is a choice.
+// The stem's colour is the stem's alone: it's how a flower knows which of its
+// pixels are stem (they wither last), so nothing else is drawn in it.
+export const isStemColor = (hex) => hex.toLowerCase() === settings.stemColor.toLowerCase();
+
+// A random colour, never the stem's, and never the same as `previous` when
+// there is a choice.
 export function randomColor(previous) {
-  const list = settings.colors.length ? settings.colors : ['#e8141c'];
+  const all = settings.colors.length ? settings.colors : ['#e8141c'];
+  const free = all.filter((c) => !isStemColor(c));
+  const list = free.length ? free : ['#e8141c'];
   const others = list.filter((c) => c !== previous);
   return pick(others.length ? others : list);
 }

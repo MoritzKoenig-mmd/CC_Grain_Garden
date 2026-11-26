@@ -3,6 +3,7 @@ import { Flower } from './flower.js';
 import { Garden } from './garden.js';
 import { Studio } from './studio.js';
 import { DevPanel } from './dev.js';
+import { Bee } from './bee.js';
 import { Album } from './album.js';
 import { Intro } from './intro.js';
 import { TreeScene } from './tree.js';
@@ -115,6 +116,7 @@ onSettings(() => {
 
 applyLook();
 new DevPanel();
+new Bee();
 
 // keep the stored state fresh if the tab is closed mid-tend
 window.addEventListener('pagehide', save);
