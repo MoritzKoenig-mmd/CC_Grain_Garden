@@ -152,7 +152,7 @@ async function joinRoom() {
   room.flowers.onChange(fromRoom);
   room.withering.onChange(witheringFromRoom);
   // and everyone else's bees, wherever we are both
-  new OtherBees(room.people, bee, () => (studio.isOpen ? 'studio' : album.isOpen ? 'album' : here));
+  new OtherBees(room.people, bee, () => (studio.isOpen ? 'studio' : album.isOpen ? 'album' : here), garden);
   console.info('[garden] in the shared garden');
 }
 

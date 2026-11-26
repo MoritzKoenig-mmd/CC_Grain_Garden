@@ -1,6 +1,10 @@
 import { ART, artScale } from './config.js';
 import { Flower } from './flower.js';
 import { settings } from "./settings.js";
+import { smoothDamp } from './bee.js';
+
+const CARRY_GLIDE_S = 0.12; // how long a flower someone else carries takes to catch up with their hand
+const DROP_WAIT_MS = 2000; // after they let go, how long it waits for where they put it down
 
 // The garden is exactly one screen: no scrolling, flowers are placed by
 // fractions of the viewport so they keep their spots when it resizes. At the
@@ -119,7 +123,48 @@ export class Garden {
   }
 
   #placement(f) {
+    const at = f.carry?.at;
+    if (at) return { x: at.x, y: at.y, s: this.scale };
     return { x: f.nx * this.w, y: this.groundY(f.ny), s: this.scale };
+  }
+
+  // ---------- carried by someone else ----------
+
+  // Someone in another garden is carrying this flower: show it in their hand.
+  carry(f, nx, ny) {
+    if (f === this.dragging) return; // ours to carry here
+    f.carry ??= { at: null, vel: { x: 0, y: 0 } };
+    f.carry.to = { nx, ny };
+    f.carry.letGo = null;
+  }
+
+  // They let go (or left). It stays where they had it until the room says
+  // where it was put down, then settles there.
+  letGo(f) {
+    const c = f.carry;
+    if (!c || c.letGo) return;
+    c.letGo = { at: performance.now(), nx: f.nx, ny: f.ny };
+  }
+
+  #glide(f, dt, now) {
+    const c = f.carry;
+    let to = c.to;
+    let home = false;
+    if (c.letGo) {
+      const putDown = f.nx !== c.letGo.nx || f.ny !== c.letGo.ny;
+      if (putDown || now - c.letGo.at > DROP_WAIT_MS) {
+        to = { nx: f.nx, ny: f.ny };
+        home = true;
+      }
+    }
+    const tx = to.nx * this.w;
+    const ty = this.groundY(to.ny);
+    if (!c.at) c.at = { x: f.nx * this.w, y: this.groundY(f.ny) }; // it's lifted from where it stood
+    const [x, vx] = smoothDamp(c.at.x, tx, c.vel.x, CARRY_GLIDE_S, dt);
+    const [y, vy] = smoothDamp(c.at.y, ty, c.vel.y, CARRY_GLIDE_S, dt);
+    c.at = { x, y };
+    c.vel = { x: vx, y: vy };
+    if (home && Math.hypot(tx - x, ty - y) < 0.5 && Math.hypot(vx, vy) < 5) delete f.carry;
   }
 
   // Put the flower so that its grabbed point (gx, gy, in art px from its base)
@@ -235,6 +280,9 @@ export class Garden {
   #frame(ms) {
     const t = ms / 1000;
     const now = Date.now();
+    const dt = Math.min(0.1, Math.max(0.001, (ms - (this.lastMs ?? ms)) / 1000 || 1 / 60));
+    this.lastMs = ms;
+    for (const f of this.flowers) if (f.carry) this.#glide(f, dt, ms);
     const ctx = this.ctx;
     const { w, h, dpr } = this;
 
@@ -255,15 +303,17 @@ export class Garden {
     // the places at the back, far off behind the flowers
     for (const p of this.places) p.draw(ctx, t, this.active && (p === this.hotPlace || p.focused), this.still);
 
-    // the flower being dragged is drawn on top until it is set down
-    const order = this.dragging ? [...this.flowers.filter((f) => f !== this.dragging), this.dragging] : this.flowers;
+    // flowers in someone's hand, ours or another's, are drawn on top until set down
+    const held = (f) => f === this.dragging || !!f.carry;
+    const order = [...this.flowers.filter((f) => !held(f)), ...this.flowers.filter(held)];
+    if (this.dragging && !this.flowers.includes(this.dragging)) order.push(this.dragging);
     for (const f of order) {
       const { x, y, s } = this.#placement(f);
       const half = ART * s;
       if (x + half < 0 || x - half > w) continue;
       f.update(now);
 
-      const amp = (f === this.hovered || f === this.dragging ? 0.07 : 0.022);
+      const amp = (f === this.hovered || f === this.dragging || (f.carry && !f.carry.letGo) ? 0.07 : 0.022);
       const shear =
         Math.sin(t * 0.85 + f.phase) * amp + Math.sin(t * 1.9 + f.phase * 2) * amp * 0.25;
 

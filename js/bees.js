@@ -5,6 +5,10 @@
 // when its owner does. It takes about 20 writes a second at most, so a bee is
 // sent ~12 times a second and glides between those on the same spring the
 // following bee uses.
+//
+// A flower being dragged rides along in the same message (one message, so the
+// two together stay inside that budget): the others see it carried across
+// their garden, and when it's let go it settles where the room says it was put.
 
 import { settings, onSettings } from './settings.js';
 import { smoothDamp } from './bee.js';
@@ -18,12 +22,15 @@ const KEY = 'bee';
 const MEETING = new Set(['gate', 'garden', 'tree']);
 
 export class OtherBees {
-  // people: playhtml.people · bee: our own Bee · where(): the place we're in
-  constructor(people, bee, where) {
+  // people: playhtml.people · bee: our own Bee · where(): the place we're in ·
+  // garden: for the flower we're carrying and the ones others carry
+  constructor(people, bee, where, garden) {
     this.people = people;
     this.bee = bee;
     this.where = where;
+    this.garden = garden;
     this.others = new Map(); // pid → { el, at, vel, target, facing }
+    this.carried = new Map(); // pid → id of the flower they're carrying
     this.lastSent = 0;
     this.sent = 'null';
     this.last = 0;
@@ -40,12 +47,20 @@ export class OtherBees {
 
   // ---------- our bee, out ----------
 
+  // { p: place, x, y, f: our bee, d: the flower we're carrying }, or null
   #mine() {
     const { bee } = this;
     const place = this.where();
-    if (!MEETING.has(place) || !bee.at || !bee.el.classList.contains('shown')) return null;
+    if (!MEETING.has(place)) return null;
     const r = (v) => Math.round(v * 10000) / 10000;
-    return { x: r(bee.at.x / window.innerWidth), y: r(bee.at.y / window.innerHeight), f: bee.facing, p: place };
+    const msg = { p: place };
+    // (a finger has no bee, but can still carry a flower)
+    if (bee.at && bee.el.classList.contains('shown')) {
+      Object.assign(msg, { x: r(bee.at.x / window.innerWidth), y: r(bee.at.y / window.innerHeight), f: bee.facing });
+    }
+    const d = this.garden.dragging;
+    if (d && place === 'garden') msg.d = { id: d.id, nx: r(d.nx), ny: r(d.ny) };
+    return 'x' in msg || msg.d ? msg : null;
   }
 
   #send(value, now = false) {
@@ -65,10 +80,16 @@ export class OtherBees {
 
   #heard(everyone) {
     const seen = new Set();
+    const carrying = new Map(); // pid → { id, nx, ny }
     for (const person of everyone) {
       if (person.isMe) continue;
       const b = person.presence?.[KEY];
-      if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) continue;
+      if (!b) continue;
+      const d = b.d;
+      if (b.p === 'garden' && d && typeof d.id === 'string' && Number.isFinite(d.nx) && Number.isFinite(d.ny)) {
+        carrying.set(person.pid, d);
+      }
+      if (!Number.isFinite(b.x) || !Number.isFinite(b.y)) continue;
       seen.add(person.pid);
       let o = this.others.get(person.pid);
       if (!o) {
@@ -84,6 +105,22 @@ export class OtherBees {
       o.el.remove();
       this.others.delete(pid);
     }
+    this.#carry(carrying);
+  }
+
+  // Flowers in other people's hands: carried along, and let go when they are.
+  #carry(carrying) {
+    const find = (id) => this.garden.flowers.find((f) => f.id === id);
+    for (const d of carrying.values()) {
+      const f = find(d.id);
+      if (f) this.garden.carry(f, d.nx, d.ny);
+    }
+    for (const [pid, id] of this.carried) {
+      if (carrying.get(pid)?.id === id) continue;
+      const f = find(id);
+      if (f) this.garden.letGo(f);
+    }
+    this.carried = new Map([...carrying].map(([pid, d]) => [pid, d.id]));
   }
 
   #hatch() {
