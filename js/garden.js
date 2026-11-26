@@ -6,6 +6,7 @@ import { settings } from "./settings.js";
 // fractions of the viewport so they keep their spots when it resizes. At the
 // back of it stand the places it leads to (places.js), behind the flowers.
 export class Garden {
+  // onChange(kind, flowers): 'plant', 'move', 'remove' or 'gone' (withered away)
   constructor(canvas, { onTend, onChange }) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
@@ -63,6 +64,7 @@ export class Garden {
 
   setFlowers(list) {
     this.flowers = list;
+    if (!list.includes(this.hovered)) this.hovered = null;
     this.#sort();
   }
 
@@ -106,14 +108,14 @@ export class Garden {
     const f = new Flower({ ...this.findSpot(), pixels, colors, tendedAt: Date.now() });
     this.flowers.push(f);
     this.#sort();
-    this.onChange();
+    this.onChange('plant', [f]);
     return f;
   }
 
   remove(flower) {
     this.flowers = this.flowers.filter((f) => f !== flower);
     if (this.hovered === flower) this.hovered = null;
-    this.onChange();
+    this.onChange('remove', [flower]);
   }
 
   #placement(f) {
@@ -214,7 +216,7 @@ export class Garden {
       this.dragging = null;
       c.classList.remove('dragging');
       this.#sort();
-      this.onChange();
+      this.onChange('move', [f]);
     };
     c.addEventListener('pointerup', end);
     c.addEventListener('pointercancel', end);
@@ -241,7 +243,7 @@ export class Garden {
     if (dead.length) {
       this.flowers = this.flowers.filter((f) => !dead.includes(f));
       if (dead.includes(this.hovered)) this.hovered = null;
-      this.onChange();
+      this.onChange('gone', dead);
     }
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

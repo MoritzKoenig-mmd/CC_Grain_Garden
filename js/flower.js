@@ -41,9 +41,12 @@ export function paintWithered(d, pixels, rgb, { field, grainA, grainB }, w, stem
   }
 }
 
+const newRev = () => Math.random().toString(36).slice(2, 10);
+
 export class Flower {
-  constructor({ id, nx, ny, seed, tendedAt, pixels, colors }) {
+  constructor({ id, rev, nx, ny, seed, tendedAt, pixels, colors }) {
     this.id = id || Math.random().toString(36).slice(2, 10);
+    this.rev = rev || newRev();
     this.nx = nx;
     this.ny = ny;
     this.seed = seed ?? randomSeed();
@@ -236,6 +239,17 @@ export class Flower {
     this.tendedAt = now;
     this.pausedAt = null;
     this.seed = randomSeed();
+    this.rev = newRev();
+    this.#rebuild();
+  }
+
+  // Someone elsewhere redrew it: take their version as it is.
+  replace({ rev, pixels, colors, seed, tendedAt }) {
+    this.rev = rev;
+    this.pixels = pixels;
+    this.colors = toNeon(colors.length ? colors : LEGACY_PALETTE);
+    this.seed = seed;
+    this.tendedAt = tendedAt;
     this.#rebuild();
   }
 

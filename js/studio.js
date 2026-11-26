@@ -1,6 +1,6 @@
 import { ART, toRgbTable } from './config.js';
 import { sprayStamp, sprayLine, bufferToImage } from './brush.js';
-import { settings, onSettings, randomColor, randomBrush, isStemColor } from './settings.js';
+import { settings, onSettings, randomColor, randomBrush, isStemColor, sprayFringe } from './settings.js';
 import { drawStem } from './stems.js';
 import { sprayedEdge, paperEdge, randomSeed } from './noise.js';
 
@@ -296,7 +296,7 @@ export class Studio {
       }
       this.#snapshot();
       last = this.#toArt(e);
-      sprayStamp(this.buf, ART, last[0], last[1], this.#radius(e), this.erasing ? 0 : this.value);
+      sprayStamp(this.buf, ART, last[0], last[1], this.#radius(e), this.erasing ? 0 : this.value, Math.random, sprayFringe());
       this.#clip();
       this.#render();
     });
@@ -304,9 +304,10 @@ export class Studio {
     p.addEventListener('pointermove', (e) => {
       if (!last) return;
       const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      const fringe = sprayFringe();
       for (const ev of events.length ? events : [e]) {
         const pt = this.#toArt(ev);
-        sprayLine(this.buf, ART, last[0], last[1], pt[0], pt[1], this.#radius(ev), this.erasing ? 0 : this.value);
+        sprayLine(this.buf, ART, last[0], last[1], pt[0], pt[1], this.#radius(ev), this.erasing ? 0 : this.value, Math.random, fringe);
         last = pt;
       }
       this.#clip();

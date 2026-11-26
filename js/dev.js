@@ -1,6 +1,6 @@
 // Dev mode: a settings panel. Open with ?dev in the address, or Shift+D.
 
-import { settings, update, reset } from './settings.js';
+import { settings, update, reset, sprayFringe } from './settings.js';
 import { sprayStamp, bufferToImage } from './brush.js';
 import { toRgbTable } from './config.js';
 
@@ -15,6 +15,24 @@ function humanTime(min) {
   if (min < 60) return `${+min.toFixed(min < 10 ? 1 : 0)} min`;
   if (min < 1440) return `${+(min / 60).toFixed(1)} h`;
   return `${+(min / 1440).toFixed(1)} d`;
+}
+
+// Where the panel was dragged to, kept per browser. Nothing stored: it sits
+// at the top left, as the stylesheet puts it.
+const POS_KEY = 'grain-garden/dev-pos';
+function loadPos() {
+  try {
+    const p = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
+    return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null;
+  } catch {
+    return null;
+  }
+}
+function savePos(p) {
+  try {
+    if (p) localStorage.setItem(POS_KEY, JSON.stringify(p));
+    else localStorage.removeItem(POS_KEY);
+  } catch {}
 }
 
 const randomHex = () => '#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
@@ -35,7 +53,7 @@ function brushPreview(r) {
   const size = 40;
   const c = el('canvas', { width: size, height: size, class: 'dev-brush' });
   const buf = new Uint8Array(size * size);
-  for (let i = 0; i < 3; i++) sprayStamp(buf, size, size / 2 - 0.5, size / 2 - 0.5, r, 1);
+  for (let i = 0; i < 3; i++) sprayStamp(buf, size, size / 2 - 0.5, size / 2 - 0.5, r, 1, Math.random, sprayFringe());
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(size, size);
   bufferToImage(buf, img, toRgbTable(['#2a2530']));
@@ -44,10 +62,14 @@ function brushPreview(r) {
 }
 
 export class DevPanel {
-  constructor() {
+  constructor({ exportAlbum } = {}) {
+    this.exportAlbum = exportAlbum;
     this.el = document.getElementById('dev');
     this.toggleBtn = document.getElementById('dev-toggle');
     this.toggleBtn.addEventListener('click', () => this.toggle());
+    this.pos = loadPos();
+    this.#bindDrag();
+    window.addEventListener('resize', () => this.#place());
 
     window.addEventListener('keydown', (e) => {
       if (e.shiftKey && e.key.toLowerCase() === 'd' && !e.target.closest?.('input')) {
@@ -68,7 +90,54 @@ export class DevPanel {
   toggle(open = this.el.hidden) {
     this.el.hidden = !open;
     this.toggleBtn.setAttribute('aria-pressed', String(open));
-    if (open) this.render();
+    if (open) {
+      this.render();
+      this.#place();
+    }
+  }
+
+  // Put the panel where it was dragged to, kept fully on screen.
+  #place() {
+    if (!this.pos || this.el.hidden) return;
+    const { width, height } = this.el.getBoundingClientRect();
+    const x = Math.min(Math.max(0, this.pos.x), Math.max(0, innerWidth - width));
+    const y = Math.min(Math.max(0, this.pos.y), Math.max(0, innerHeight - Math.min(height, 40)));
+    this.el.style.left = `${x}px`;
+    this.el.style.top = `${y}px`;
+  }
+
+  // Drag the panel around by its header; double-click the header to send it
+  // back to the top left.
+  #bindDrag() {
+    let grab = null;
+    this.el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || !e.target.closest('.dev-head') || e.target.closest('button')) return;
+      const r = this.el.getBoundingClientRect();
+      grab = { dx: e.clientX - r.left, dy: e.clientY - r.top, id: e.pointerId };
+      this.el.setPointerCapture(e.pointerId);
+      this.el.classList.add('dragging');
+      e.preventDefault();
+    });
+    this.el.addEventListener('pointermove', (e) => {
+      if (!grab || e.pointerId !== grab.id) return;
+      this.pos = { x: e.clientX - grab.dx, y: e.clientY - grab.dy };
+      this.#place();
+    });
+    const drop = (e) => {
+      if (!grab || e.pointerId !== grab.id) return;
+      grab = null;
+      this.el.classList.remove('dragging');
+      savePos(this.pos);
+    };
+    this.el.addEventListener('pointerup', drop);
+    this.el.addEventListener('pointercancel', drop);
+    this.el.addEventListener('dblclick', (e) => {
+      if (!e.target.closest('.dev-head') || e.target.closest('button')) return;
+      this.pos = null;
+      savePos(null);
+      this.el.style.left = '';
+      this.el.style.top = '';
+    });
   }
 
   render() {
@@ -128,9 +197,16 @@ export class DevPanel {
       ),
     );
 
+    // the brush previews, redrawn when the spray settings change
+    const previews = [];
+    const redrawPreviews = () => previews.forEach(({ wrap, i }) => wrap.replaceChildren(brushPreview(settings.brushes[i])));
+    const sprayAmount = el('output', { class: 'dev-value' }, `${(s.sprayAmount * 100).toFixed(1)}%`);
+    const sprayRange = el('output', { class: 'dev-value' }, `${s.sprayRange.toFixed(2)}×`);
+
     const brushes = s.brushes.map((r, i) => {
       const val = el('output', { class: 'dev-value' }, r.toFixed(1));
       const prev = el('span', { class: 'dev-brush-wrap' }, brushPreview(r));
+      previews.push({ wrap: prev, i });
       return el(
         'div',
         { class: 'dev-row' },
@@ -195,7 +271,7 @@ export class DevPanel {
       el(
         'header',
         { class: 'dev-head' },
-        el('strong', {}, 'dev'),
+        el('strong', { title: 'drag to move · double-click to put back' }, 'dev'),
         el('button', { type: 'button', class: 'dev-x', 'aria-label': 'close', onclick: () => this.toggle(false) }, '×'),
       ),
 
@@ -383,6 +459,16 @@ export class DevPanel {
         {},
         el('h3', {}, 'brush sizes'),
         ...brushes,
+        slider('spray', 'how much spray lands around a stroke (share of its specks that stray)', { min: 0, max: 200, step: 1 }, Math.round(s.sprayAmount * 1000), sprayAmount, (v) => {
+          update({ sprayAmount: v / 1000 });
+          sprayAmount.textContent = `${(v / 10).toFixed(1)}%`;
+          redrawPreviews();
+        }),
+        slider('spray range', 'how far the spray reaches from a stroke, in brush radii', { min: 50, max: 200, step: 1 }, Math.round(s.sprayRange * 100), sprayRange, (v) => {
+          update({ sprayRange: v / 100 });
+          sprayRange.textContent = `${(v / 100).toFixed(2)}×`;
+          redrawPreviews();
+        }),
         el(
           'button',
           {
@@ -394,6 +480,29 @@ export class DevPanel {
             },
           },
           '+ brush',
+        ),
+      ),
+
+      el(
+        'section',
+        {},
+        el('h3', {}, 'album'),
+        el(
+          'button',
+          {
+            type: 'button',
+            class: 'dev-add',
+            id: 'dev-export-album',
+            disabled: !this.exportAlbum,
+            onclick: (e) => {
+              const btn = e.currentTarget;
+              btn.disabled = true;
+              this.exportAlbum()
+                .catch((err) => console.error('[album export]', err))
+                .finally(() => (btn.disabled = false));
+            },
+          },
+          'export album as png',
         ),
       ),
 

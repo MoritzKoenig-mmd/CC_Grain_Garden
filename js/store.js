@@ -1,6 +1,6 @@
-// Persistence. Right now the garden lives in this browser's localStorage.
-// To make one shared garden for everyone, swap load/save for calls to a
-// backend that stores the same records.
+// Persistence in this browser's localStorage: the garden when it can't reach
+// the shared room (js/shared.js), and the album, which is always this
+// browser's own.
 
 const KEY = 'grain-garden/v1';
 const ALBUM_KEY = 'grain-garden/album/v1';
@@ -45,19 +45,33 @@ export function load(length) {
   }
 }
 
+// A flower as stored, here and in the shared room.
+export function toRecord(f) {
+  return {
+    id: f.id,
+    rev: f.rev, // changes whenever the drawing does
+    nx: f.nx,
+    ny: f.ny,
+    colors: [...f.colors],
+    seed: f.seed,
+    // time spent being tended doesn't count toward withering
+    tendedAt: f.pausedAt == null ? f.tendedAt : f.tendedAt + (Date.now() - f.pausedAt),
+    pixels: encode(f.pixels),
+  };
+}
+
+// Is this a flower record we can grow (it may have come from anyone)?
+export function isRecord(r) {
+  return (
+    !!r && typeof r.id === 'string' && typeof r.pixels === 'string' && Array.isArray(r.colors) &&
+    r.colors.every((c) => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c)) &&
+    [r.nx, r.ny, r.seed, r.tendedAt].every(Number.isFinite)
+  );
+}
+
 export function save(flowers) {
   try {
-    const records = flowers.map((f) => ({
-      id: f.id,
-      nx: f.nx,
-      ny: f.ny,
-      colors: f.colors,
-      seed: f.seed,
-      // time spent being tended doesn't count toward withering
-      tendedAt: f.pausedAt == null ? f.tendedAt : f.tendedAt + (Date.now() - f.pausedAt),
-      pixels: encode(f.pixels),
-    }));
-    localStorage.setItem(KEY, JSON.stringify(records));
+    localStorage.setItem(KEY, JSON.stringify(flowers.map(toRecord)));
   } catch {
     /* storage full or blocked: the garden still works for this visit */
   }

@@ -1,5 +1,6 @@
 import { ART, toRgbTable, toNeon } from './config.js';
 import * as store from './store.js';
+import { settings } from './settings.js';
 
 // The album: a pop-up over the garden like the drawing sheet, with a stream of
 // paper running off the top and bottom of the screen and every kept flower
@@ -24,6 +25,34 @@ function boxOf(pixels) {
   }
   return x1 < 0 ? null : [x0, y0, x1, y1];
 }
+
+// A kept flower's drawing, cropped to its box, as ImageData.
+function imageOf(entry) {
+  const [x0, y0, x1, y1] = entry.box;
+  const w = x1 - x0 + 1;
+  const h = y1 - y0 + 1;
+  const pixels = store.decode(entry.pixels, ART * ART);
+  const rgb = toRgbTable(entry.colors);
+  const img = new ImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const v = pixels[(y + y0) * ART + x + x0];
+      if (!v) continue;
+      const c = rgb[v];
+      const j = (y * w + x) * 4;
+      img.data[j] = c[0];
+      img.data[j + 1] = c[1];
+      img.data[j + 2] = c[2];
+      img.data[j + 3] = 255;
+    }
+  }
+  return img;
+}
+
+// The exported PNG: one art px is EXPORT_PX image px, and the strip is as wide
+// as on screen relative to the drawings (a whole drawing fills 55% of it).
+const EXPORT_PX = 3;
+const EXPORT_W = Math.round((ART * EXPORT_PX) / 0.55);
 
 export class Album {
   constructor({ onOpen, onClose }) {
@@ -138,24 +167,92 @@ export class Album {
   }
 
   #paint(canvas, entry) {
-    const [x0, y0] = entry.box;
-    const { width: w, height: h } = canvas;
-    const pixels = store.decode(entry.pixels, ART * ART);
-    const rgb = toRgbTable(entry.colors);
-    const ctx = canvas.getContext('2d');
-    const img = ctx.createImageData(w, h);
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const v = pixels[(y + y0) * ART + x + x0];
-        if (!v) continue;
-        const c = rgb[v];
-        const j = (y * w + x) * 4;
-        img.data[j] = c[0];
-        img.data[j + 1] = c[1];
-        img.data[j + 2] = c[2];
-        img.data[j + 3] = 255;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
+    canvas.getContext('2d').putImageData(imageOf(entry), 0, 0);
+  }
+
+  // The whole album as one tall PNG, laid out like the stream: newest first,
+  // on the paper strip, one art px drawn as EXPORT_PX image px. Resolves to a Blob.
+  async exportPng() {
+    const k = EXPORT_W / 460; // image px per css px of the on-screen stream
+    const hand = getComputedStyle(document.documentElement).getPropertyValue('--hand').trim() || 'sans-serif';
+    const titleFont = `700 ${30 * k}px ${hand}`;
+    const labelFont = `700 ${20 * k}px ${hand}`;
+    await Promise.all([document.fonts.load(titleFont, 'album'), document.fonts.load(labelFont, 'no. 0')]);
+    const strip = new Image();
+    strip.src = 'img/strip.png';
+    await strip.decode();
+
+    const measure = document.createElement('canvas').getContext('2d');
+    const items = [...this.entries].reverse().map((entry) => {
+      const label = `no. ${entry.no} · ${dateLabel(entry.keptAt)}`;
+      measure.font = labelFont;
+      const [x0, y0, x1, y1] = entry.box;
+      const w = (x1 - x0 + 1) * EXPORT_PX;
+      const h = (y1 - y0 + 1) * EXPORT_PX;
+      return { entry, label, w, h, lw: measure.measureText(label).width };
+    });
+
+    const titleH = 30 * k * 1.4;
+    const labelH = 20 * k * 1.4 + 10 * k; // the caption plus its gap and margin
+    const gap = 44 * k;
+    let height = 72 * k + titleH + 28 * k;
+    height += items.reduce((sum, it) => sum + it.h + labelH, 0) + gap * Math.max(0, items.length - 1);
+    height = Math.ceil(height + 120 * k);
+
+    const c = document.createElement('canvas');
+    c.width = EXPORT_W;
+    c.height = height;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = settings.background;
+    ctx.fillRect(0, 0, c.width, c.height);
+    const tileH = Math.round((EXPORT_W * strip.naturalHeight) / strip.naturalWidth);
+    for (let y = 0; y < height; y += tileH) ctx.drawImage(strip, 0, y, EXPORT_W, tileH);
+
+    // the words get the same sprayed edge as on screen, where the browser can
+    const text = (str, font, color, x, y) => {
+      ctx.save();
+      ctx.filter = 'url(#spray)';
+      ctx.font = font;
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(str, x, y);
+      ctx.restore();
+    };
+
+    const mid = EXPORT_W / 2;
+    let y = 72 * k;
+    const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#2a2530';
+    text('album', titleFont, ink, mid, y);
+    y += titleH + 28 * k;
+    items.forEach((it, i) => {
+      // odd ones lean left, even ones right, as in the stream
+      const cx = mid + (i % 2 ? 1 : -1) * 0.08 * Math.max(it.w, it.lw);
+      const art = document.createElement('canvas');
+      art.width = it.w / EXPORT_PX;
+      art.height = it.h / EXPORT_PX;
+      art.getContext('2d').putImageData(imageOf(it.entry), 0, 0);
+      ctx.drawImage(art, Math.round(cx - it.w / 2), Math.round(y), it.w, it.h);
+      y += it.h + 10 * k;
+      text(it.label, labelFont, '#6f6a76', cx, y);
+      y += 20 * k * 1.4 + gap;
+    });
+
+    return new Promise((resolve, reject) =>
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error('could not make the png'))), 'image/png'),
+    );
+  }
+
+  // Export the album and hand it to the browser as a download.
+  async downloadPng() {
+    const blob = await this.exportPng();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `grain-garden-album-${new Date().toISOString().slice(0, 10)}.png`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 }

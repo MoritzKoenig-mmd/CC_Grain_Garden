@@ -525,10 +525,11 @@ html[data-dark="true"] #dev-toggle { color: #f0ecff; box-shadow: inset 0 0 0 1px
 #dev {
   position: fixed;
   top: 16px;
-  right: 16px;
+  left: 16px; /* moved by dragging its header (js/dev.js) */
   z-index: 20;
   width: min(300px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
+  /* stops above the dev button, which sits below it at the bottom left */
+  max-height: calc(100vh - 86px);
   overflow-y: auto;
   padding: 14px 16px 16px;
   background: rgba(251, 248, 241, 0.95);
@@ -540,7 +541,11 @@ html[data-dark="true"] #dev-toggle { color: #f0ecff; box-shadow: inset 0 0 0 1px
 #dev[hidden] { display: none; }
 #dev section { padding: 10px 0; border-top: 1px solid rgba(42, 37, 48, 0.12); }
 #dev h3 { margin: 0 0 8px; font-size: 11px; font-weight: 500; color: var(--ink-soft); text-transform: lowercase; }
-.dev-head { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; }
+.dev-head {
+  display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px;
+  cursor: grab; touch-action: none; user-select: none;
+}
+#dev.dragging .dev-head { cursor: grabbing; }
 .dev-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
 .dev-row input[type="range"] { flex: 1; min-width: 0; accent-color: var(--ink); }
 .dev-label { width: 56px; color: var(--ink-soft); }

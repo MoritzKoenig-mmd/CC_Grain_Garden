@@ -9,8 +9,9 @@ import { Intro } from './intro.js';
 import { TreeScene } from './tree.js';
 import { TreePlace, GatePlace } from './places.js';
 import { seedFlowers } from './seed.js';
-import { settings, onSettings, lifespanMs } from './settings.js';
+import { settings, onSettings, lifespanMs, update, DEFAULTS } from './settings.js';
 import * as store from './store.js';
+import { connect } from './shared.js';
 
 // ---------- static film grain ----------
 // Two tiles: dark specks to multiply over light backgrounds, light specks to
@@ -45,9 +46,122 @@ function applyLook() {
   document.body.style.background = settings.background;
 }
 
-// ---------- wiring ----------
+// ---------- one garden for everyone ----------
 
-const save = () => store.save(garden.flowers);
+// The garden lives in a shared room (js/shared.js) that everyone's garden
+// follows. Until it answers, nothing is shown (the gate covers the garden on
+// arrival anyway); if it can't be reached, this browser gardens alone, in its
+// own localStorage, the way it used to.
+let mode = 'connecting'; // → 'shared' | 'alone'
+let room = null;
+const early = []; // flowers planted before the room answered
+
+// localStorage keeps only the garden of someone gardening alone, so the shared
+// garden never overwrites it
+const save = () => {
+  if (mode === 'alone') store.save(garden.flowers);
+};
+
+// Something happened to some flowers here: tell the room.
+function changed(kind, flowers) {
+  if (mode === 'alone') return save();
+  if (mode === 'connecting') {
+    for (const f of flowers) {
+      const i = early.indexOf(f);
+      if (kind === 'plant') early.push(f);
+      else if (kind !== 'move' && i >= 0) early.splice(i, 1);
+    }
+    return;
+  }
+  if (kind === 'plant') room.flowers.putMany(flowers.map(store.toRecord));
+  else if (kind === 'move') room.flowers.patch(Object.fromEntries(flowers.map((f) => [f.id, { nx: f.nx, ny: f.ny }])));
+  else for (const f of flowers) room.flowers.remove(f.id);
+}
+
+// A flower was redrawn here.
+function redrawn(f) {
+  if (mode === 'shared') room.flowers.put(store.toRecord(f));
+  else save();
+}
+
+// The room changed (anyone's doing, ours included): make the garden match it.
+function fromRoom(records) {
+  const here = new Map(garden.flowers.map((f) => [f.id, f]));
+  const next = [];
+  for (const r of Object.values(records)) {
+    if (!store.isRecord(r)) continue;
+    try {
+      let f = here.get(r.id);
+      if (!f) {
+        f = new Flower({ ...r, pixels: store.decode(r.pixels, ART * ART) });
+      } else {
+        if (f.rev !== r.rev) f.replace({ ...r, pixels: store.decode(r.pixels, ART * ART) });
+        // being tended here, its clock is held back until we let go of it
+        else if (f.pausedAt == null) f.tendedAt = r.tendedAt;
+        // the one we're carrying stays in our hand
+        if (f !== garden.dragging) Object.assign(f, { nx: r.nx, ny: r.ny });
+      }
+      next.push(f);
+    } catch {
+      /* a record we can't read: leave it out */
+    }
+  }
+  garden.setFlowers(next);
+}
+
+// The withering settings are the room's, so a flower withers on the same
+// clock for everyone.
+const WITHERING = ['lifespanMin', 'fastAt', 'fastMs', 'stemMs'];
+const witheringOf = (s) => Object.fromEntries(WITHERING.map((k) => [k, s[k]]));
+let fromTheRoom = false; // a settings change that came from the room, not from here
+
+function witheringFromRoom(values) {
+  const patch = {};
+  for (const k of WITHERING) if (Number.isFinite(values[k]) && values[k] !== settings[k]) patch[k] = values[k];
+  if (!Object.keys(patch).length) return;
+  fromTheRoom = true;
+  try {
+    update(patch);
+  } finally {
+    fromTheRoom = false;
+  }
+}
+
+async function joinRoom() {
+  try {
+    room = await connect();
+  } catch (err) {
+    console.info('[garden] the shared garden is out of reach, gardening alone:', err?.message || err);
+    gardenAlone();
+    return;
+  }
+  // a new room starts with the default withering
+  const w = room.withering.get();
+  if (WITHERING.some((k) => !Number.isFinite(w[k]))) room.withering.set(witheringOf(DEFAULTS));
+  witheringFromRoom(room.withering.get());
+
+  mode = 'shared';
+  // a brand-new room gets a few flowers, so the first visitor isn't alone
+  if (!room.meta.get().seeded && !Object.keys(room.flowers.get()).length) {
+    room.meta.set({ seeded: true });
+    room.flowers.putMany(seedFlowers().map((r) => store.toRecord(new Flower(r))));
+  }
+  room.flowers.putMany(early.splice(0).map(store.toRecord));
+  fromRoom(room.flowers.get());
+  room.flowers.onChange(fromRoom);
+  room.withering.onChange(witheringFromRoom);
+  console.info('[garden] in the shared garden');
+}
+
+function gardenAlone() {
+  mode = 'alone';
+  let records = store.load(ART * ART);
+  if (records === null) records = seedFlowers();
+  garden.setFlowers([...records.map((r) => new Flower(r)), ...early.splice(0)]);
+  save();
+}
+
+// ---------- wiring ----------
 
 const garden = new Garden(document.getElementById('garden'), {
   onTend(flower) {
@@ -56,7 +170,7 @@ const garden = new Garden(document.getElementById('garden'), {
     studio.open(flower, flower.remaining(now));
     settle();
   },
-  onChange: save,
+  onChange: changed,
 });
 
 const studio = new Studio({
@@ -71,11 +185,14 @@ const studio = new Studio({
       return;
     }
     flower.tend(pixels, colors, Date.now());
-    save();
+    redrawn(flower);
   },
   onLeave(flower) {
     settle();
-    if (flower) flower.resume(Date.now());
+    if (!flower) return;
+    flower.resume(Date.now());
+    // the time spent tending it doesn't count, for anyone
+    if (mode === 'shared') room.flowers.patch({ [flower.id]: { tendedAt: flower.tendedAt } });
   },
   // keeping a flower picks it: into the album, out of the garden
   onKeep(pixels, colors, flower) {
@@ -92,30 +209,35 @@ document.getElementById('draw').addEventListener('click', () => {
   settle();
 });
 
-let records = store.load(ART * ART);
-if (records === null) records = seedFlowers();
-garden.setFlowers(records.map((r) => new Flower(r)));
-save();
+joinRoom();
 
-// When the withering speed changes, every flower keeps how far along it is.
+// When the withering speed is changed here, every flower keeps how far along
+// it is, for everyone. (A change from the room comes with the flowers' clocks
+// already moved by whoever made it.)
 let lastLifespan = lifespanMs();
 onSettings(() => {
   applyLook();
   const next = lifespanMs();
-  if (next !== lastLifespan) {
+  if (next !== lastLifespan && !fromTheRoom) {
     const now = Date.now();
     for (const f of garden.flowers) {
       const at = f.pausedAt ?? now;
       const progress = (at - f.tendedAt) / lastLifespan;
       f.tendedAt = at - progress * next;
     }
-    lastLifespan = next;
-    save();
+    if (mode === 'shared') room.flowers.patch(Object.fromEntries(garden.flowers.map((f) => [f.id, { tendedAt: f.pausedAt == null ? f.tendedAt : f.tendedAt + (now - f.pausedAt) }])));
+    else save();
+  }
+  lastLifespan = next;
+  if (mode === 'shared' && !fromTheRoom) {
+    const mine = witheringOf(settings);
+    const theirs = room.withering.get();
+    if (WITHERING.some((k) => mine[k] !== theirs[k])) room.withering.set(mine);
   }
 });
 
 applyLook();
-new DevPanel();
+new DevPanel({ exportAlbum: () => album.downloadPng() });
 new Bee();
 
 // keep the stored state fresh if the tab is closed mid-tend
