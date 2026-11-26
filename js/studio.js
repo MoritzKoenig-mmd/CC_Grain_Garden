@@ -127,7 +127,7 @@ export class Studio {
   }
 
   #pickBrush() {
-    this.radius = randomBrush();
+    ({ r: this.radius, range: this.sprayRange } = randomBrush());
   }
 
   // ---------- ui ----------
@@ -296,7 +296,7 @@ export class Studio {
       }
       this.#snapshot();
       last = this.#toArt(e);
-      sprayStamp(this.buf, ART, last[0], last[1], this.#radius(e), this.erasing ? 0 : this.value, Math.random, sprayFringe());
+      sprayStamp(this.buf, ART, last[0], last[1], this.#radius(e), this.erasing ? 0 : this.value, Math.random, sprayFringe(this.sprayRange));
       this.#clip();
       this.#render();
     });
@@ -304,7 +304,7 @@ export class Studio {
     p.addEventListener('pointermove', (e) => {
       if (!last) return;
       const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-      const fringe = sprayFringe();
+      const fringe = sprayFringe(this.sprayRange);
       for (const ev of events.length ? events : [e]) {
         const pt = this.#toArt(ev);
         sprayLine(this.buf, ART, last[0], last[1], pt[0], pt[1], this.#radius(ev), this.erasing ? 0 : this.value, Math.random, fringe);

@@ -1,6 +1,6 @@
 // Dev mode: a settings panel. Open with ?dev in the address, or Shift+D.
 
-import { settings, update, reset, sprayFringe } from './settings.js';
+import { settings, update, reset, sprayFringe, sprayRangeOf } from './settings.js';
 import { sprayStamp, bufferToImage } from './brush.js';
 import { toRgbTable } from './config.js';
 
@@ -49,11 +49,11 @@ function el(tag, attrs = {}, ...kids) {
   return n;
 }
 
-function brushPreview(r) {
+function brushPreview(r, range) {
   const size = 40;
   const c = el('canvas', { width: size, height: size, class: 'dev-brush' });
   const buf = new Uint8Array(size * size);
-  for (let i = 0; i < 3; i++) sprayStamp(buf, size, size / 2 - 0.5, size / 2 - 0.5, r, 1, Math.random, sprayFringe());
+  for (let i = 0; i < 3; i++) sprayStamp(buf, size, size / 2 - 0.5, size / 2 - 0.5, r, 1, Math.random, sprayFringe(range));
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(size, size);
   bufferToImage(buf, img, toRgbTable(['#2a2530']));
@@ -199,15 +199,26 @@ export class DevPanel {
 
     // the brush previews, redrawn when the spray settings change
     const previews = [];
-    const redrawPreviews = () => previews.forEach(({ wrap, i }) => wrap.replaceChildren(brushPreview(settings.brushes[i])));
+    const redrawPreviews = () => previews.forEach(({ wrap, i }) => wrap.replaceChildren(brushPreview(settings.brushes[i], sprayRangeOf(i))));
     const sprayAmount = el('output', { class: 'dev-value' }, `${(s.sprayAmount * 100).toFixed(1)}%`);
-    const sprayRange = el('output', { class: 'dev-value' }, `${s.sprayRange.toFixed(2)}×`);
+    const times = (v) => `${v.toFixed(2)}×`;
+    // every brush's spray range, filled in for brushes that don't have one yet
+    const ranges = () => settings.brushes.map((_, k) => sprayRangeOf(k));
 
     const brushes = s.brushes.map((r, i) => {
       const val = el('output', { class: 'dev-value' }, r.toFixed(1));
-      const prev = el('span', { class: 'dev-brush-wrap' }, brushPreview(r));
+      const prev = el('span', { class: 'dev-brush-wrap' }, brushPreview(r, sprayRangeOf(i)));
       previews.push({ wrap: prev, i });
-      return el(
+      const rangeVal = el('output', { class: 'dev-value' }, times(sprayRangeOf(i)));
+      const rangeRow = slider('spray range', `how far brush ${i + 1}'s spray reaches from a stroke, in brush radii`, { min: 20, max: 200, step: 1 }, Math.round(sprayRangeOf(i) * 100), rangeVal, (v) => {
+        const next = ranges();
+        next[i] = v / 100;
+        update({ sprayRanges: next });
+        rangeVal.textContent = times(v / 100);
+        prev.replaceChildren(brushPreview(settings.brushes[i], v / 100));
+      });
+      rangeRow.classList.add('dev-sub');
+      const sizeRow = el(
         'div',
         { class: 'dev-row' },
         prev,
@@ -224,7 +235,7 @@ export class DevPanel {
             next[i] = v;
             update({ brushes: next });
             val.textContent = v.toFixed(1);
-            prev.replaceChildren(brushPreview(v));
+            prev.replaceChildren(brushPreview(v, sprayRangeOf(i)));
           },
         }),
         val,
@@ -236,13 +247,17 @@ export class DevPanel {
             'aria-label': 'remove brush',
             disabled: s.brushes.length <= 1,
             onclick: () => {
-              update({ brushes: settings.brushes.filter((_, k) => k !== i) });
+              update({
+                brushes: settings.brushes.filter((_, k) => k !== i),
+                sprayRanges: ranges().filter((_, k) => k !== i),
+              });
               rerender();
             },
           },
           '×',
         ),
       );
+      return el('div', { class: 'dev-brush-item' }, sizeRow, rangeRow);
     });
 
     // per flower / per stroke switch for one setting key
@@ -464,18 +479,13 @@ export class DevPanel {
           sprayAmount.textContent = `${(v / 10).toFixed(1)}%`;
           redrawPreviews();
         }),
-        slider('spray range', 'how far the spray reaches from a stroke, in brush radii', { min: 50, max: 200, step: 1 }, Math.round(s.sprayRange * 100), sprayRange, (v) => {
-          update({ sprayRange: v / 100 });
-          sprayRange.textContent = `${(v / 100).toFixed(2)}×`;
-          redrawPreviews();
-        }),
         el(
           'button',
           {
             type: 'button',
             class: 'dev-add',
             onclick: () => {
-              update({ brushes: [...settings.brushes, 5] });
+              update({ brushes: [...settings.brushes, 5], sprayRanges: [...ranges(), 0.5] });
               rerender();
             },
           },

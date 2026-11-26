@@ -59,11 +59,35 @@ function values(channel) {
   };
 }
 
+// Every tab is a visitor of its own, with its own bee. (playhtml keeps one
+// identity per browser and hides a browser's tabs from each other, so two tabs
+// side by side wouldn't see each other's bees or the flowers they carry.) Kept
+// in sessionStorage: a reload is the same visitor, a new tab a new one.
+const VISITOR_KEY = 'grain-garden/visitor';
+const PALETTE = ['#ff1744', '#ff1fb4', '#ff6a00', '#ffd000', '#00e65c', '#00b4ff', '#2d5bff', '#7c3aff'];
+
+function visitor() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(VISITOR_KEY) || 'null');
+    if (saved && typeof saved.publicKey === 'string') return saved;
+  } catch {}
+  const k = Math.floor(Math.random() * PALETTE.length);
+  const me = {
+    publicKey: crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+    playerStyle: { colorPalette: [0, 3, 5].map((d) => PALETTE[(k + d) % PALETTE.length]) },
+    createdAt: Date.now(),
+  };
+  try {
+    sessionStorage.setItem(VISITOR_KEY, JSON.stringify(me));
+  } catch {}
+  return me;
+}
+
 // Connect to the room. Rejects if playhtml can't be loaded or reached in time.
 export async function connect() {
   const { playhtml } = await within(import(LIB), WAIT_MS);
   await within(
-    Promise.resolve(playhtml.init({ room: ROOM })).then(() => playhtml.ready),
+    Promise.resolve(playhtml.init({ room: ROOM, playerIdentity: visitor() })).then(() => playhtml.ready),
     WAIT_MS,
   );
   return {

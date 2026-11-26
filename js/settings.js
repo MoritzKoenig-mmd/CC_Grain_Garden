@@ -3,7 +3,7 @@
 import { toNeon } from './config.js';
 
 const KEY = 'grain-garden/settings';
-const VERSION = 8;
+const VERSION = 9;
 
 export const DEFAULTS = {
   version: VERSION,
@@ -23,7 +23,8 @@ export const DEFAULTS = {
   colors: ['#ff1744', '#ff1fb4', '#ff6a00', '#ffd000', '#00e65c', '#00b4ff', '#2d5bff', '#7c3aff'],
   brushes: [2.6, 4.6, 8], // brush radii in art pixels
   sprayAmount: 0.01, // share of each stroke's specks that stray out around it, 0..0.9
-  sprayRange: 0.5, // how far the stray specks reach, as a multiple of the brush radius
+  // how far each brush's stray specks reach, as a multiple of its radius (one per brush)
+  sprayRanges: [0.5, 0.5, 0.3],
   stems: true, // new drawings start with one of the predefined stems
   stemColor: '#00e65c',
   tools: { erase: false, undo: false, clear: false }, // which studio tools are shown
@@ -55,6 +56,8 @@ function migrate(saved) {
     if (saved.sprayAmount === 0.05) delete saved.sprayAmount;
     if (saved.sprayRange === 0.95) delete saved.sprayRange;
   }
+  // the spray range went from one for all brushes to one per brush
+  if ((saved.version || 0) < 9) delete saved.sprayRange;
   if ((saved.version || 0) < 4) {
     // the palette went neon
     if (Array.isArray(saved.colors)) saved.colors = toNeon(saved.colors);
@@ -116,5 +119,14 @@ export function randomColor(previous) {
   return pick(others.length ? others : list);
 }
 // The spray around a drawn stroke, as sprayStamp takes it.
-export const sprayFringe = () => ({ amount: settings.sprayAmount, range: settings.sprayRange });
-export const randomBrush = () => pick(settings.brushes.length ? settings.brushes : [4.6]);
+export const sprayFringe = (range) => ({ amount: settings.sprayAmount, range });
+
+// The spray range of brush i (brushes added before it had one get the usual).
+export const sprayRangeOf = (i) => (Number.isFinite(settings.sprayRanges?.[i]) ? settings.sprayRanges[i] : 0.5);
+
+// A random brush: its radius and its spray range.
+export function randomBrush() {
+  if (!settings.brushes.length) return { r: 4.6, range: 0.5 };
+  const i = Math.floor(Math.random() * settings.brushes.length);
+  return { r: settings.brushes[i], range: sprayRangeOf(i) };
+}
