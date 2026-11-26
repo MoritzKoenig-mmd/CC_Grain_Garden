@@ -99,6 +99,8 @@ button { font: inherit; color: inherit; }
 .word:hover { transform: rotate(-3deg) translateY(-1px); }
 .word:active { transform: translateY(1px); }
 .word:disabled { opacity: 0.3; transform: none; }
+/* the shovel stays solid even before there's anything to plant (it just doesn't plant yet) */
+#plant:disabled { opacity: 1; }
 .word:focus-visible { outline: none; text-decoration: underline 2px; text-underline-offset: 6px; }
 html[data-dark="true"] .word { color: #f0ecff; }
 
@@ -128,7 +130,8 @@ html[data-dark="true"] .word { color: #f0ecff; }
 #draw { --glyph: image-set(url("img/icon-pencil-big.png") 1x, url("img/icon-pencil-big@2x.png") 2x); }
 #leave { --glyph: image-set(url("img/icon-x-big.png") 1x, url("img/icon-x-big@2x.png") 2x); }
 #keep { --glyph: image-set(url("img/icon-book-big.png") 1x, url("img/icon-book-big@2x.png") 2x); }
-#plant { --glyph: image-set(url("img/icon-konev-big.png") 1x, url("img/icon-konev-big@2x.png") 2x); }
+#plant { --glyph: image-set(url("img/icon-shovel-big.png") 1x, url("img/icon-shovel-big@2x.png") 2x); } /* planting: a shovel (source _assets/shovel.png) */
+#studio #plant .glyph { width: 100px; height: 100px; } /* a bit bigger than the other icons (its images are 100 / 200 px) */
 .word.icon:focus-visible { text-decoration: none; box-shadow: inset 0 -2px 0 currentColor; }
 /* the browser wouldn't store another flower: said in words next to the book */
 .icon[data-note]::after { content: attr(data-note); font-size: 22px; filter: url(#spray); }
@@ -603,6 +606,9 @@ html[data-dark="true"] #dev-toggle { color: #f0ecff; box-shadow: inset 0 0 0 1px
   cursor: pointer; color: var(--ink-soft); text-decoration: underline; text-underline-offset: 3px;
 }
 .dev-add:hover { color: var(--ink); }
+.dev-danger { display: block; }
+.dev-danger.armed { color: #e8141c; font-weight: 700; }
+.dev-note { margin: 0 0 2px; font-size: 12px; color: var(--ink-soft); }
 #dev footer { padding-top: 10px; border-top: 1px solid rgba(42, 37, 48, 0.12); }
 
 /* ---------- film grain over everything ---------- */

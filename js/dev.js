@@ -49,6 +49,42 @@ function el(tag, attrs = {}, ...kids) {
   return n;
 }
 
+// A button for something that can't be undone: the first click asks (in the
+// button itself, no browser dialog), a second one within a few seconds does it.
+const SURE_MS = 3000;
+function sure(label, what, action) {
+  let armed = null;
+  const btn = el(
+    'button',
+    {
+      type: 'button',
+      class: 'dev-add dev-danger',
+      title: `removes ${what}`,
+      disabled: !action,
+      onclick: () => {
+        if (!armed) {
+          btn.textContent = `sure? click again to ${label}`;
+          btn.classList.add('armed');
+          armed = setTimeout(disarm, SURE_MS);
+          return;
+        }
+        disarm();
+        action();
+        btn.textContent = `${label}: done`;
+        setTimeout(() => (btn.textContent = label), 1500);
+      },
+    },
+    label,
+  );
+  const disarm = () => {
+    clearTimeout(armed);
+    armed = null;
+    btn.textContent = label;
+    btn.classList.remove('armed');
+  };
+  return btn;
+}
+
 function brushPreview(r, range) {
   const size = 40;
   const c = el('canvas', { width: size, height: size, class: 'dev-brush' });
@@ -62,8 +98,10 @@ function brushPreview(r, range) {
 }
 
 export class DevPanel {
-  constructor({ exportAlbum } = {}) {
+  constructor({ exportAlbum, clearGarden, clearAlbum } = {}) {
     this.exportAlbum = exportAlbum;
+    this.clearGarden = clearGarden;
+    this.clearAlbum = clearAlbum;
     this.el = document.getElementById('dev');
     this.toggleBtn = document.getElementById('dev-toggle');
     this.toggleBtn.addEventListener('click', () => this.toggle());
@@ -543,6 +581,15 @@ export class DevPanel {
           },
           'export album as png',
         ),
+      ),
+
+      el(
+        'section',
+        {},
+        el('h3', {}, 'clear'),
+        el('p', { class: 'dev-note' }, 'for everyone in the shared garden, and it can’t be undone'),
+        sure('clear garden', 'every flower in the garden', this.clearGarden),
+        sure('clear album', 'every flower in the album', this.clearAlbum),
       ),
 
       el(

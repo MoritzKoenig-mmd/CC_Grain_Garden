@@ -43,6 +43,12 @@ function keyed(channel) {
         if (all[id]) delete all[id];
       });
     },
+    // every record gone, in one change
+    clear() {
+      channel.setData((all) => {
+        for (const id of Object.keys(all)) delete all[id];
+      });
+    },
   };
 }
 

@@ -170,6 +170,17 @@ async function joinRoom() {
   console.info('[garden] in the shared garden');
 }
 
+// Every flower out of the garden (from dev mode): out of everyone's, in the
+// shared garden. It stays empty; it isn't sown again with the first flowers.
+function clearGarden() {
+  early.length = 0;
+  if (mode === 'shared') room.flowers.clear();
+  else {
+    garden.setFlowers([]);
+    save();
+  }
+}
+
 function gardenAlone() {
   mode = 'alone';
   let records = store.load(ART * ART);
@@ -254,7 +265,7 @@ onSettings(() => {
 });
 
 applyLook();
-new DevPanel({ exportAlbum: () => album.downloadPng() });
+new DevPanel({ exportAlbum: () => album.downloadPng(), clearGarden, clearAlbum: () => album.clear() });
 const bee = new Bee();
 
 // keep the stored state fresh if the tab is closed mid-tend

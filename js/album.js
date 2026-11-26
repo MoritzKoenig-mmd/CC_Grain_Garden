@@ -212,6 +212,13 @@ export class Album {
     return this.entries.map((e) => e.id).join(',');
   }
 
+  // Empty the album: everyone's in the shared garden, and this browser's copy.
+  clear() {
+    if (this.room) this.room.clear();
+    store.saveAlbum([]);
+    this.#setEntries([]);
+  }
+
   // Keep a copy of a drawing. Returns false if it couldn't be kept anywhere.
   add(pixels, colors) {
     const box = boxOf(pixels);
