@@ -45,6 +45,18 @@ function applyLook() {
   grain.style.backgroundImage = lum < 110 ? GRAIN.dark : GRAIN.light;
   grain.style.mixBlendMode = lum < 110 ? "screen" : "multiply";
   document.body.style.background = settings.background;
+  applyTextSpray();
+}
+
+// The fine spray on the album's words, as set in dev mode.
+function applyTextSpray() {
+  const f = document.getElementById('spray-fine');
+  if (!f) return;
+  const { thick, soft, grain, ink } = settings.textSpray;
+  f.querySelector('feMorphology').setAttribute('radius', String(thick));
+  f.querySelector('feGaussianBlur').setAttribute('stdDeviation', String(soft));
+  f.querySelector('feTurbulence').setAttribute('baseFrequency', String(grain));
+  f.querySelector('feComposite[operator="arithmetic"]').setAttribute('k4', String(ink));
 }
 
 // ---------- one garden for everyone ----------
@@ -151,6 +163,8 @@ async function joinRoom() {
   fromRoom(room.flowers.get());
   room.flowers.onChange(fromRoom);
   room.withering.onChange(witheringFromRoom);
+  // the album is everyone's too
+  album.useRoom(room.album);
   // and everyone else's bees, wherever we are both
   new OtherBees(room.people, bee, () => (studio.isOpen ? 'studio' : album.isOpen ? 'album' : here), garden);
   console.info('[garden] in the shared garden');

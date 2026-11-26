@@ -201,6 +201,18 @@ export class DevPanel {
     const previews = [];
     const redrawPreviews = () => previews.forEach(({ wrap, i }) => wrap.replaceChildren(brushPreview(settings.brushes[i], sprayRangeOf(i))));
     const sprayAmount = el('output', { class: 'dev-value' }, `${(s.sprayAmount * 100).toFixed(1)}%`);
+    const albumColumns = el('output', { class: 'dev-value' }, String(s.albumColumns));
+    const albumGap = el('output', { class: 'dev-value' }, `${s.albumGap} px`);
+    const albumTitleSpace = el('output', { class: 'dev-value' }, `${s.albumTitleSpace} px`);
+    // a slider for one value of the album words' spray
+    const textSpray = (key, label, title, attrs, show) => {
+      const out = el('output', { class: 'dev-value' }, show(s.textSpray[key]));
+      return slider(label, title, attrs, s.textSpray[key], out, (v) => {
+        update({ textSpray: { ...settings.textSpray, [key]: v } });
+        out.textContent = show(v);
+      });
+    };
+    const fixed = (n) => (v) => v.toFixed(n);
     const times = (v) => `${v.toFixed(2)}×`;
     // every brush's spray range, filled in for brushes that don't have one yet
     const ranges = () => settings.brushes.map((_, k) => sprayRangeOf(k));
@@ -497,6 +509,23 @@ export class DevPanel {
         'section',
         {},
         el('h3', {}, 'album'),
+        slider('columns', 'how many columns the album lays its flowers out in', { min: 1, max: 6, step: 1 }, s.albumColumns, albumColumns, (v) => {
+          update({ albumColumns: v });
+          albumColumns.textContent = String(v);
+        }),
+        slider('gap', 'empty space above and below the album paper', { min: 0, max: 240, step: 1 }, s.albumGap, albumGap, (v) => {
+          update({ albumGap: v });
+          albumGap.textContent = `${v} px`;
+        }),
+        slider('title space', 'room on the paper above the word "album"', { min: 24, max: 240, step: 1 }, s.albumTitleSpace, albumTitleSpace, (v) => {
+          update({ albumTitleSpace: v });
+          albumTitleSpace.textContent = `${v} px`;
+        }),
+        el('h3', {}, 'album words'),
+        textSpray('thick', 'thickness', 'how much each letter is thickened before it is sprayed', { min: 0, max: 3, step: 0.1 }, (v) => `${v.toFixed(1)} px`),
+        textSpray('soft', 'softness', 'how soft the letters\' edges are before the grain breaks them up', { min: 0.2, max: 2.5, step: 0.05 }, fixed(2)),
+        textSpray('grain', 'grain', 'how fine the specks are: higher is finer', { min: 0.2, max: 1.6, step: 0.05 }, fixed(2)),
+        textSpray('ink', 'ink', 'how much of each letter survives: higher keeps more', { min: 0.5, max: 1.3, step: 0.01 }, fixed(2)),
         el(
           'button',
           {

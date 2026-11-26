@@ -23,6 +23,18 @@
       <feComposite in="fat" in2="mask" operator="in" result="ink"/>
       <feComponentTransfer in="ink"><feFuncA type="discrete" tableValues="0 1 1 1 1 1 1 1"/></feComponentTransfer>
     </filter>
+    <!-- The same, much finer, for small words (the album's): less thickening,
+         finer grain and more of each letter kept, so they stay readable. -->
+    <filter id="spray-fine" x="-15%" y="-30%" width="130%" height="160%" color-interpolation-filters="sRGB">
+      <feMorphology in="SourceGraphic" operator="dilate" radius="1.1" result="fat"/>
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.85" result="soft"/>
+      <feTurbulence type="fractalNoise" baseFrequency="1.15" numOctaves="1" seed="7" result="noise"/>
+      <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0" result="grain"/>
+      <feComposite in="soft" in2="grain" operator="arithmetic" k1="0" k2="1" k3="-1.5" k4="1.02" result="raw"/>
+      <feComponentTransfer in="raw" result="mask"><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>
+      <feComposite in="fat" in2="mask" operator="in" result="ink"/>
+      <feComponentTransfer in="ink"><feFuncA type="discrete" tableValues="0 1 1 1 1 1 1 1"/></feComponentTransfer>
+    </filter>
   </svg>
 
   <canvas id="garden" aria-label="the garden"></canvas>
@@ -70,7 +82,6 @@
 
     <div class="album-actions">
       <button type="button" id="album-close" class="word icon" aria-label="leave"><i class="glyph"></i></button>
-      <span class="album-count"></span>
     </div>
   </section>
 

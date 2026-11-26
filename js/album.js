@@ -1,6 +1,7 @@
 import { ART, toRgbTable, toNeon } from './config.js';
 import * as store from './store.js';
-import { settings } from './settings.js';
+import { settings, onSettings } from './settings.js';
+import { drawFrame } from './deco.js';
 
 // The album: a pop-up over the garden like the drawing sheet, with a stream of
 // paper running off the top and bottom of the screen and every kept flower
@@ -8,6 +9,22 @@ import { settings } from './settings.js';
 // leave it), never wither here and are there for good: nothing in the album
 // can be taken out again. Each is cropped to its drawing but drawn at one shared
 // pixel size, so a small flower stays small next to a big one.
+//
+// The album is everyone's: in the shared garden its flowers live in the room
+// (js/shared.js), so a flower kept by anyone shows up in every album, open ones
+// included. Each browser also keeps a copy of the flowers kept in it; that's
+// the album it shows when the room can't be reached, and anything kept while
+// out of reach goes into the shared album the next time the room is there.
+// Flowers are numbered in the order they were kept, across everyone.
+
+// A kept flower as the room or this browser has it, checked; null if it's unreadable.
+function entryOf(r) {
+  if (!r || typeof r.id !== 'string' || typeof r.pixels !== 'string' || !Number.isFinite(r.keptAt)) return null;
+  if (!Array.isArray(r.box) || r.box.length !== 4 || !r.box.every(Number.isInteger)) return null;
+  if (!Array.isArray(r.colors) || !r.colors.every((c) => typeof c === 'string')) return null;
+  // (flowers kept before the colours went neon are shown in neon too)
+  return { id: r.id, keptAt: r.keptAt, colors: toNeon(r.colors), box: [...r.box], pixels: r.pixels };
+}
 
 const dateLabel = (ms) =>
   new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).toLowerCase();
@@ -61,11 +78,27 @@ export class Album {
     this.el = document.getElementById('album'); // also what scrolls
     this.list = this.el.querySelector('.kept');
     this.empty = this.el.querySelector('.album-empty');
-    this.count = this.el.querySelector('.album-count');
     this.openBtn = document.getElementById('album-open');
     this.closeBtn = document.getElementById('album-close');
-    // flowers kept before the colours went neon are shown in neon too
-    this.entries = store.loadAlbum().map((e) => ({ ...e, colors: toNeon(e.colors || []) }));
+    // the paper and the sprayed line round it (js/deco.js), behind the flowers
+    this.stream = this.el.querySelector('.stream');
+    this.title = this.el.querySelector('.stream-title');
+    this.frame = document.createElement('div');
+    this.frame.className = 'album-frame';
+    this.frame.setAttribute('aria-hidden', 'true');
+    this.stream.prepend(this.frame);
+    // measures one art px (the album's --px) in css px
+    this.probe = document.createElement('div');
+    this.probe.className = 'album-probe';
+    this.el.append(this.probe);
+    this.#applyLayout();
+    onSettings(() => this.#applyLayout());
+    // the paper grows with every flower and follows the screen and the columns
+    new ResizeObserver(() => this.isOpen && this.#drawFrame()).observe(this.stream);
+    this.room = null; // the shared album, once the room is there (useRoom)
+    this.entries = [];
+    this.shown = ''; // which flowers the open album shows, so it's only redrawn when that changes
+    this.#setEntries(store.loadAlbum());
 
     // paint flowers only as they scroll near, so a long album stays light
     this.observer = new IntersectionObserver(
@@ -86,6 +119,39 @@ export class Album {
     });
   }
 
+  // From dev mode: how many columns the flowers are laid out in (the stream
+  // widens to hold them), and the gap above and below the paper.
+  #applyLayout() {
+    const n = Math.min(6, Math.max(1, Math.round(settings.albumColumns) || 1));
+    this.el.style.setProperty('--cols', n);
+    this.el.dataset.cols = n;
+    const gap = Number.isFinite(settings.albumGap) ? Math.max(0, settings.albumGap) : 15;
+    this.el.style.setProperty('--gap', `${gap}px`);
+    const room = Number.isFinite(settings.albumTitleSpace) ? Math.max(0, settings.albumTitleSpace) : 63;
+    this.el.style.setProperty('--title-space', `${room}px`);
+    if (this.isOpen) this.#drawFrame();
+  }
+
+  // Spray the frame for the paper as it is now. (Layout sizes, not on-screen
+  // ones: the paper is still rising into place when the album opens.)
+  #drawFrame() {
+    const px = this.probe.offsetWidth / 1000;
+    const width = this.stream.offsetWidth;
+    const height = this.stream.offsetHeight;
+    // the word itself, not its line: where the frame leaves its gap
+    const words = document.createRange();
+    words.selectNodeContents(this.title);
+    const r = words.getBoundingClientRect();
+    const s = this.stream.getBoundingClientRect();
+    const k = s.width / width || 1; // (in case the paper is scaled as it rises in)
+    const title = { x: (r.left - s.left) / k, y: (r.top - s.top) / k, w: r.width / k, h: r.height / k };
+    if (!px || !width || !height) return;
+    const key = [width, height, px, title.x, title.y, title.w, title.h].join('|');
+    if (key === this.frameKey) return;
+    this.frameKey = key;
+    drawFrame(this.frame, width, height, title, px);
+  }
+
   get isOpen() {
     return !this.el.hidden;
   }
@@ -93,15 +159,15 @@ export class Album {
   open() {
     this.#render();
     this.el.hidden = false;
+    this.#drawFrame();
     this.el.scrollTop = 0;
     this.onOpen();
     this.closeBtn.focus({ preventScroll: true });
   }
 
-  #updateCount() {
+  #updateEmpty() {
     const n = this.entries.length;
     this.empty.hidden = n > 0;
-    this.count.textContent = n ? `${n} kept` : '';
   }
 
   close() {
@@ -109,22 +175,60 @@ export class Album {
     this.onClose();
   }
 
-  // Keep a copy of a drawing. Returns false if the browser wouldn't store it.
+  // Share the album: from now on it's the room's (`room` is a keyed channel,
+  // js/shared.js). Flowers kept in this browser that the room hasn't had yet
+  // go in first.
+  useRoom(room) {
+    this.room = room;
+    const own = store.loadAlbum();
+    const fresh = own.filter((e) => !e.shared).map(entryOf).filter(Boolean);
+    if (fresh.length) {
+      room.putMany(fresh);
+      store.saveAlbum(own.map((e) => ({ ...e, shared: true })));
+    }
+    room.onChange((records) => this.#setEntries(Object.values(records)));
+    this.#setEntries(Object.values(room.get()));
+  }
+
+  // The album is now `list` (in any order, duplicates and unreadable ones left out).
+  #setEntries(list) {
+    const byId = new Map();
+    for (const r of list) {
+      const e = entryOf(r);
+      if (e) byId.set(e.id, e);
+    }
+    this.entries = [...byId.values()].sort((a, b) => a.keptAt - b.keptAt || (a.id < b.id ? -1 : 1));
+    this.entries.forEach((e, i) => (e.no = i + 1));
+    if (this.isOpen && this.#key() !== this.shown) {
+      // someone kept a flower while it's open: it appears at the top, and what
+      // was being looked at stays where it was
+      const before = this.list.offsetHeight;
+      this.#render();
+      if (this.el.scrollTop > 0) this.el.scrollTop += this.list.offsetHeight - before;
+    }
+  }
+
+  #key() {
+    return this.entries.map((e) => e.id).join(',');
+  }
+
+  // Keep a copy of a drawing. Returns false if it couldn't be kept anywhere.
   add(pixels, colors) {
     const box = boxOf(pixels);
     if (!box) return false;
-    const no = this.entries.reduce((m, e) => Math.max(m, e.no || 0), 0) + 1;
     const entry = {
       id: Math.random().toString(36).slice(2, 10),
-      no,
       keptAt: Date.now(),
       colors: [...colors],
       box,
       pixels: store.encode(pixels),
     };
-    const next = [...this.entries, entry];
-    if (!store.saveAlbum(next)) return false;
-    this.entries = next;
+    // this browser's copy (with its number, as albums from before sharing had)
+    const own = store.loadAlbum();
+    const saved = store.saveAlbum([...own, { ...entry, no: own.length + 1, shared: !!this.room }]);
+    if (this.room) this.room.put(entry);
+    else if (!saved) return false;
+    this.#setEntries([...this.entries, entry]);
     // the album word hops once the sheet has flown into it
     this.openBtn.classList.remove('bump');
     void this.openBtn.offsetWidth;
@@ -137,7 +241,8 @@ export class Album {
     const items = [];
     for (let i = this.entries.length - 1; i >= 0; i--) items.push(this.#item(this.entries[i]));
     this.list.replaceChildren(...items);
-    this.#updateCount();
+    this.shown = this.#key();
+    this.#updateEmpty();
   }
 
   #item(entry) {

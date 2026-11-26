@@ -94,6 +94,7 @@ export async function connect() {
     flowers: keyed(playhtml.createPageData('flowers-v1', {})),
     withering: values(playhtml.createPageData('withering-v1', {})),
     meta: values(playhtml.createPageData('garden-v1', { seeded: false })),
+    album: keyed(playhtml.createPageData('album-v1', {})), // everyone's kept flowers (js/album.js)
     people: playhtml.people, // who's here right now, and their bees (js/bees.js)
   };
 }

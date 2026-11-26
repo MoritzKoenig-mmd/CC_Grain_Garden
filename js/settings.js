@@ -3,7 +3,7 @@
 import { toNeon } from './config.js';
 
 const KEY = 'grain-garden/settings';
-const VERSION = 9;
+const VERSION = 14;
 
 export const DEFAULTS = {
   version: VERSION,
@@ -21,10 +21,20 @@ export const DEFAULTS = {
   brushPer: 'flower', // random brush size once per 'flower', or every 'stroke'
   // neon: saturated enough to shine, deep enough to hold up on white
   colors: ['#ff1744', '#ff1fb4', '#ff6a00', '#ffd000', '#00e65c', '#00b4ff', '#2d5bff', '#7c3aff'],
-  brushes: [2.6, 4.6, 8], // brush radii in art pixels
+  brushes: [2.6, 4.2, 6.2], // brush radii in art pixels
   sprayAmount: 0.01, // share of each stroke's specks that stray out around it, 0..0.9
   // how far each brush's stray specks reach, as a multiple of its radius (one per brush)
   sprayRanges: [0.5, 0.5, 0.3],
+  albumColumns: 3, // how many columns the album lays its flowers out in
+  albumGap: 15, // px of empty space above and below the album's paper
+  albumTitleSpace: 63, // px from the top of the album's paper to the word "album"
+  // the fine spray on the album's words (#spray-fine in index.html)
+  textSpray: {
+    thick: 1.1, // px each letter is thickened by
+    soft: 0.85, // how soft its edge is before the grain breaks it up
+    grain: 1.15, // how fine the specks are (higher is finer)
+    ink: 1.02, // how much of each letter survives (higher keeps more)
+  },
   stems: true, // new drawings start with one of the predefined stems
   stemColor: '#00e65c',
   tools: { erase: false, undo: false, clear: false }, // which studio tools are shown
@@ -56,6 +66,17 @@ function migrate(saved) {
     if (saved.sprayAmount === 0.05) delete saved.sprayAmount;
     if (saved.sprayRange === 0.95) delete saved.sprayRange;
   }
+  // the brushes got new default sizes; settings saved with the old ones take them
+  if ((saved.version || 0) < 14 && JSON.stringify(saved.brushes) === '[2.6,4.6,8]') delete saved.brushes;
+  // the room above the album's title went down to 63 px
+  if ((saved.version || 0) < 13 && saved.albumTitleSpace === 96) delete saved.albumTitleSpace;
+  // the album words' spray got new defaults; settings saved with the old ones take them
+  const t = saved.textSpray;
+  if ((saved.version || 0) < 12 && t && t.thick === 1 && t.soft === 0.9 && t.grain === 0.9 && t.ink === 0.95) delete saved.textSpray;
+  // the album's gap went down to 15 px; settings saved with the old 48 take it
+  if ((saved.version || 0) < 11 && saved.albumGap === 48) delete saved.albumGap;
+  // the album went to three columns by default; settings saved with the old one take it
+  if ((saved.version || 0) < 10 && saved.albumColumns === 1) delete saved.albumColumns;
   // the spray range went from one for all brushes to one per brush
   if ((saved.version || 0) < 9) delete saved.sprayRange;
   if ((saved.version || 0) < 4) {
@@ -82,6 +103,7 @@ function load() {
     migrate(saved);
     const merged = { ...clone(DEFAULTS), ...saved };
     merged.tools = { ...DEFAULTS.tools, ...(saved.tools || {}) };
+    merged.textSpray = { ...DEFAULTS.textSpray, ...(saved.textSpray || {}) };
     return merged;
   } catch {
     return clone(DEFAULTS);
@@ -126,7 +148,7 @@ export const sprayRangeOf = (i) => (Number.isFinite(settings.sprayRanges?.[i]) ?
 
 // A random brush: its radius and its spray range.
 export function randomBrush() {
-  if (!settings.brushes.length) return { r: 4.6, range: 0.5 };
+  if (!settings.brushes.length) return { r: 4.2, range: 0.5 };
   const i = Math.floor(Math.random() * settings.brushes.length);
   return { r: settings.brushes[i], range: sprayRangeOf(i) };
 }
