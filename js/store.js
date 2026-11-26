@@ -1,6 +1,6 @@
 // Persistence in this browser's localStorage: the garden when it can't reach
-// the shared room (js/shared.js), and the album, which is always this
-// browser's own.
+// the shared room (js/shared.js), and this browser's copy of the flowers kept
+// in it (the album itself is shared, js/album.js).
 
 const KEY = 'grain-garden/v1';
 const ALBUM_KEY = 'grain-garden/album/v1';

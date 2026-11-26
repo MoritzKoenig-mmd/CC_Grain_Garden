@@ -260,12 +260,27 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
    the top and bottom of the screen. The paper scrolls with the flowers and
    never ends, so the album reads as endless. */
 #album {
-  --strip: min(460px, calc(100vw - 24px));
-  /* one art pixel: a whole 144 px drawing would fill 55% of the stream */
-  --px: calc(var(--strip) * 0.55 / 144);
+  --cols: 3; /* set from dev mode (js/album.js) */
+  --gap: 15px; /* empty space above and below the paper, also from dev mode */
+  --title-space: 63px; /* room on the paper above the word "album", also from dev mode */
+  /* the paper strip at its one-column size: its grain is drawn at this scale */
+  --sheet: min(460px, calc(100vw - 24px));
+  /* the stream widens for more columns, as far as the screen goes */
+  --strip: min(calc(var(--cols) * 340px + 120px), calc(100vw - 24px));
+  /* one column of the stream's solid middle (82% of it), less the gaps between columns */
+  --col: calc((var(--strip) * 0.82 - (var(--cols) - 1) * 24px) / var(--cols));
+  /* one art pixel: a whole 144 px drawing fills two thirds of a column
+     (in one column, 55% of the stream, as it always was) */
+  --px: calc(var(--col) * 0.67 / 144);
   position: fixed;
   inset: 0;
   z-index: 5;
+  /* the paper sits in the middle with a gap above and below it, the bottom
+     one reached only once it's scrolled to the end */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--gap) 0;
   overflow-y: auto; /* scrolls from anywhere, not only over the paper */
   overscroll-behavior: contain;
   scrollbar-width: none;
@@ -275,18 +290,17 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
 #album::-webkit-scrollbar { display: none; }
 
 .stream {
+  flex: none;
   width: var(--strip);
   min-height: 100%;
-  margin: 0 auto;
-  /* the strip's solid white middle is 84% of its width; content stays in it.
-     Half a screen of empty paper after the last flower: the stream goes on. */
-  padding: 72px 9% 50vh;
-  background: url("img/strip.png") center top / 100% auto repeat-y;
-  image-rendering: pixelated;
+  /* Content stays in the middle 82%. A little paper after the last flower,
+     then the sheet ends. The paper itself, its grainy edge and the yellow line
+     round it are painted by js/deco.js, its edge following the line's waves. */
+  padding: var(--title-space) 9% 130px;
   animation: lift-in 260ms cubic-bezier(.2,.8,.2,1) both;
 }
 
-/* leave · count, on the veil either side of the stream */
+/* leave, on the veil beside the stream */
 .album-actions {
   position: fixed;
   z-index: 1;
@@ -307,15 +321,7 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
   font-size: 30px;
   font-weight: 700;
   color: var(--ink);
-  filter: url(#spray);
-}
-
-.album-count {
-  padding: 6px 10px;
-  font-size: 22px;
-  font-weight: 700;
-  color: #6f6a76;
-  filter: url(#spray);
+  filter: url(#spray-fine); /* the fine spray: small words stay readable */
 }
 
 .album-empty {
@@ -324,7 +330,7 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
   font-size: 28px;
   font-weight: 700;
   color: var(--ink);
-  filter: url(#spray);
+  filter: url(#spray-fine); /* the fine spray: small words stay readable */
 }
 .album-empty small {
   display: block;
@@ -334,14 +340,37 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
   color: #6f6a76;
 }
 
+.stream { position: relative; }
+/* the paper and its sprayed yellow line (js/deco.js), behind the flowers;
+   painted in a stack of canvases, so a long album needs no giant one */
+.album-frame {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.album-frame canvas {
+  position: absolute;
+  left: 0;
+  image-rendering: pixelated;
+}
+/* one art px of the album, measured by js/album.js */
+.album-probe {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  width: calc(var(--px) * 1000);
+  height: 0;
+}
 .kept {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 44px;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  justify-items: center;
+  align-items: end; /* each row's flowers stand on one line */
+  gap: 44px 24px;
 }
 /* laid down by hand: alternately a little left and right */
 .kept-flower {
@@ -351,8 +380,9 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
   gap: 4px;
   max-width: 100%;
 }
-.kept-flower:nth-child(odd) { transform: translateX(-8%); }
-.kept-flower:nth-child(even) { transform: translateX(8%); }
+/* in a single column they're laid down a little left and right in turn */
+#album[data-cols="1"] .kept-flower:nth-child(odd) { transform: translateX(-8%); }
+#album[data-cols="1"] .kept-flower:nth-child(even) { transform: translateX(8%); }
 .kept-flower canvas {
   width: calc(var(--px) * var(--w));
   max-width: 100%;
@@ -364,7 +394,7 @@ body:has(#album:not([hidden])) .dock { visibility: hidden; }
   font-size: 20px;
   font-weight: 700;
   color: #6f6a76;
-  filter: url(#spray);
+  filter: url(#spray-fine); /* the fine spray: small words stay readable */
 }
 
 /* ---------- places ---------- */
