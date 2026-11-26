@@ -70,5 +70,6 @@ export async function connect() {
     flowers: keyed(playhtml.createPageData('flowers-v1', {})),
     withering: values(playhtml.createPageData('withering-v1', {})),
     meta: values(playhtml.createPageData('garden-v1', { seeded: false })),
+    people: playhtml.people, // who's here right now, and their bees (js/bees.js)
   };
 }

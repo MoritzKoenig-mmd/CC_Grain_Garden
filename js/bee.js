@@ -17,7 +17,7 @@ const PERK_S = 0.08; // how quickly it grows over something pressable (s)
 
 // A critically damped spring (the usual "smooth damp"): eases in and out with
 // no overshoot, at any frame rate. Returns [position, velocity].
-function smoothDamp(from, to, vel, time, dt) {
+export function smoothDamp(from, to, vel, time, dt) {
   const omega = 2 / time;
   const x = omega * dt;
   const decay = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);

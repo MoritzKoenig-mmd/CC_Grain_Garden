@@ -4,6 +4,7 @@ import { Garden } from './garden.js';
 import { Studio } from './studio.js';
 import { DevPanel } from './dev.js';
 import { Bee } from './bee.js';
+import { OtherBees } from './bees.js';
 import { Album } from './album.js';
 import { Intro } from './intro.js';
 import { TreeScene } from './tree.js';
@@ -150,6 +151,8 @@ async function joinRoom() {
   fromRoom(room.flowers.get());
   room.flowers.onChange(fromRoom);
   room.withering.onChange(witheringFromRoom);
+  // and everyone else's bees, wherever we are both
+  new OtherBees(room.people, bee, () => (studio.isOpen ? 'studio' : album.isOpen ? 'album' : here));
   console.info('[garden] in the shared garden');
 }
 
@@ -238,7 +241,7 @@ onSettings(() => {
 
 applyLook();
 new DevPanel({ exportAlbum: () => album.downloadPng() });
-new Bee();
+const bee = new Bee();
 
 // keep the stored state fresh if the tab is closed mid-tend
 window.addEventListener('pagehide', save);

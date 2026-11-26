@@ -76,6 +76,8 @@ html.bee-cursor, html.bee-cursor *:not(#paper) { cursor: none !important; }
   will-change: transform;
 }
 .bee.shown { display: block; }
+/* other people's bees (js/bees.js) fly just under your own */
+.bee.other { z-index: 999; }
 
 /* ---------- buttons ---------- */
 
