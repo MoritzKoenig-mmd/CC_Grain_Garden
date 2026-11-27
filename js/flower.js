@@ -29,9 +29,13 @@ export function paintWithered(d, pixels, rgb, { field, grainA, grainB }, w, stem
       continue;
     }
     let c = live[v];
-    if (w > 0 && f < w + DRY_BAND) {
+    // The drying edge widens as the withering gets going, up to DRY_BAND: at
+    // full width from the start, a fresh flower would show dry grains (about
+    // 4% of it) the moment it began to wither, a split second after planting.
+    const band = Math.min(DRY_BAND, w);
+    if (w > 0 && f < w + band) {
       // inside the drying edge: the closer to the erosion, the more grains turn
-      const t = (f - w) / DRY_BAND;
+      const t = (f - w) / band;
       if (grainA[i] > t) c = grainB[i] < 0.4 ? ASH : dry[v];
     }
     d[j] = c[0];
