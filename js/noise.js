@@ -45,10 +45,11 @@ function valueNoise(w, h, cell, rand) {
 // A stencil for the drawing sheet: 1 where paint may land, 0 where it may not.
 // Toward a rounded border it dissolves into grain, like the sprayed paper
 // frame, so a drawing never ends in a hard square edge. `band` is how wide the
-// dissolving border is and `radius` how round its corners are (art px).
-export function sprayedEdge(size, seed, band = 22, radius = 30) {
+// dissolving border is and `radius` how round its corners are (art px; by
+// default in proportion to a 144 px sheet).
+export function sprayedEdge(size, seed, band = (22 * size) / 144, radius = (30 * size) / 144) {
   const rand = mulberry32(seed);
-  const wobble = valueNoise(size, size, 23, rand); // keeps the outline hand-sprayed, not geometric
+  const wobble = valueNoise(size, size, (23 * size) / 144, rand); // keeps the outline hand-sprayed, not geometric
   const mask = new Uint8Array(size * size);
   const h = size / 2;
   for (let y = 0; y < size; y++) {
@@ -83,12 +84,14 @@ export function paperEdge(cover, seed) {
 
 // The wither field: layered noise plus per-pixel grain, then rank-normalised so
 // values are uniformly spread over 0..1. That way a wither level of 0.3 erases
-// ~30% of the flower, and 1.0 erases all of it.
-export function makeWitherField(size, seed) {
+// ~30% of the flower, and 1.0 erases all of it. `k` scales the noise's blobs,
+// for drawings on a finer grid (js/config.js DETAIL), so they wither in
+// patches of the same size on screen.
+export function makeWitherField(size, seed, k = 1) {
   const rand = mulberry32(seed);
-  const n1 = valueNoise(size, size, 19, rand);
-  const n2 = valueNoise(size, size, 9, rand);
-  const n3 = valueNoise(size, size, 4, rand);
+  const n1 = valueNoise(size, size, 19 * k, rand);
+  const n2 = valueNoise(size, size, 9 * k, rand);
+  const n3 = valueNoise(size, size, 4 * k, rand);
   const n = size * size;
   const raw = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -112,12 +115,12 @@ export function makeWitherField(size, seed) {
 
 // The same kind of field for a picture of any size (w×h) in art px, like the
 // gate on the way in. Ranked through a fine histogram instead of a full sort,
-// which keeps big pictures quick.
-export function makeDissolveField(w, h, seed) {
+// which keeps big pictures quick. `blob` scales the blobs, as `k` above.
+export function makeDissolveField(w, h, seed, blob = 1) {
   const rand = mulberry32(seed);
-  const n1 = valueNoise(w, h, 19, rand);
-  const n2 = valueNoise(w, h, 9, rand);
-  const n3 = valueNoise(w, h, 4, rand);
+  const n1 = valueNoise(w, h, 19 * blob, rand);
+  const n2 = valueNoise(w, h, 9 * blob, rand);
+  const n3 = valueNoise(w, h, 4 * blob, rand);
   const n = w * h;
   const raw = new Float32Array(n);
   let lo = Infinity;

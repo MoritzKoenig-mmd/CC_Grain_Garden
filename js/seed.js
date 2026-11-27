@@ -2,12 +2,16 @@
 // field. They are drawn with the same spray brush people use, and start at
 // different ages so the withering is visible straight away.
 
-import { ART, LEGACY_PALETTE } from './config.js';
+import { ART, BASE, DETAIL, LEGACY_PALETTE } from './config.js';
 import { lifespanMs } from './settings.js';
 import { sprayPath } from './brush.js';
 import { mulberry32 } from './noise.js';
 
 const TAU = Math.PI * 2;
+
+// The seed flowers are laid out in BASE px and sprayed at the drawing's fineness.
+const spray = (buf, pts, r, color, rand) =>
+  sprayPath(buf, ART, pts.map(([x, y]) => [x * DETAIL, y * DETAIL]), r * DETAIL, color, rand);
 
 export function wobble(rand, amt) {
   const a = rand() * TAU, b = rand() * TAU, c = rand() * TAU;
@@ -44,10 +48,10 @@ function petalFlower(buf, rand, { cx, cy, petals, pr, color, r }) {
   for (let k = 0; k < petals; k++) {
     const a = rot + (k / petals) * TAU;
     const d = pr * 1.05;
-    sprayPath(buf, ART, loop(cx + Math.cos(a) * d, cy + Math.sin(a) * d, pr * 0.78, pr * 0.52, a, rand), r, color, rand);
+    spray(buf, loop(cx + Math.cos(a) * d, cy + Math.sin(a) * d, pr * 0.78, pr * 0.52, a, rand), r, color, rand);
   }
-  sprayPath(buf, ART, loop(cx, cy, pr * 0.42, pr * 0.42, 0, rand, 0.8), r, color, rand);
-  sprayPath(buf, ART, stem(cx, cy + pr * 1.7, cx + (rand() - 0.5) * 24, ART - 3, (rand() - 0.5) * 18, rand), r, color, rand);
+  spray(buf, loop(cx, cy, pr * 0.42, pr * 0.42, 0, rand, 0.8), r, color, rand);
+  spray(buf, stem(cx, cy + pr * 1.7, cx + (rand() - 0.5) * 24, BASE - 3, (rand() - 0.5) * 18, rand), r, color, rand);
 }
 
 function starFlower(buf, rand, { cx, cy, R, color, r }) {
@@ -58,16 +62,16 @@ function starFlower(buf, rand, { cx, cy, R, color, r }) {
     const rr = (i % 2 ? R * 0.45 : R) * (0.9 + rand() * 0.2);
     pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]);
   }
-  sprayPath(buf, ART, pts, r, color, rand);
-  sprayPath(buf, ART, stem(cx, cy + R * 0.5, cx - 18, ART - 3, 10, rand), r, color, rand);
+  spray(buf, pts, r, color, rand);
+  spray(buf, stem(cx, cy + R * 0.5, cx - 18, BASE - 3, 10, rand), r, color, rand);
 }
 
 function clover(buf, rand, { cx, cy, pr, color, r }) {
   for (let k = 0; k < 4; k++) {
     const a = Math.PI / 4 + (k / 4) * TAU;
-    sprayPath(buf, ART, loop(cx + Math.cos(a) * pr, cy + Math.sin(a) * pr, pr * 0.85, pr * 0.85, 0, rand), r, color, rand);
+    spray(buf, loop(cx + Math.cos(a) * pr, cy + Math.sin(a) * pr, pr * 0.85, pr * 0.85, 0, rand), r, color, rand);
   }
-  sprayPath(buf, ART, stem(cx, cy + pr * 1.6, cx + 6, ART - 3, -8, rand), r, color, rand);
+  spray(buf, stem(cx, cy + pr * 1.6, cx + 6, BASE - 3, -8, rand), r, color, rand);
 }
 
 function tulip(buf, rand, { cx, cy, s, color, r }) {
@@ -76,9 +80,9 @@ function tulip(buf, rand, { cx, cy, s, color, r }) {
     [cx + s * 0.4, cy + s], [cx + s * 0.9, cy + s * 0.4], [cx + s, cy - s * 0.9],
     [cx + s * 0.45, cy - s * 0.3], [cx, cy - s * 1.05], [cx - s * 0.45, cy - s * 0.3], [cx - s, cy - s * 0.9],
   ];
-  sprayPath(buf, ART, cup, r, color, rand);
-  sprayPath(buf, ART, stem(cx, cy + s, cx + 4, ART - 3, 6, rand), r, color, rand);
-  sprayPath(buf, ART, loop(cx - 16, ART - 30, 12, 5, -0.6, rand, 0.6), r * 0.8, color, rand);
+  spray(buf, cup, r, color, rand);
+  spray(buf, stem(cx, cy + s, cx + 4, BASE - 3, 6, rand), r, color, rand);
+  spray(buf, loop(cx - 16, BASE - 30, 12, 5, -0.6, rand, 0.6), r * 0.8, color, rand);
 }
 
 export function seedFlowers() {

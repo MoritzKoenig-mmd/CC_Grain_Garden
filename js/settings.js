@@ -1,9 +1,9 @@
 // Everything adjustable from dev mode. Stored in this browser's localStorage.
 
-import { toNeon } from './config.js';
+import { toNeon, DEFAULT_DETAIL, DETAIL } from './config.js';
 
 const KEY = 'grain-garden/settings';
-const VERSION = 14;
+const VERSION = 16;
 
 export const DEFAULTS = {
   version: VERSION,
@@ -21,7 +21,14 @@ export const DEFAULTS = {
   brushPer: 'flower', // random brush size once per 'flower', or every 'stroke'
   // neon: saturated enough to shine, deep enough to hold up on white
   colors: ['#ff1744', '#ff1fb4', '#ff6a00', '#ffd000', '#00e65c', '#00b4ff', '#2d5bff', '#7c3aff'],
-  brushes: [2.6, 4.2, 6.2], // brush radii in art pixels
+  brushes: [2.6, 4.2, 6.2], // brush radii in BASE px (js/config.js), whatever the fineness
+  // How fine the grain is: each BASE px of a drawing is split into detail×detail
+  // art px (one of DETAILS in js/config.js). Read when the page loads.
+  detail: DEFAULT_DETAIL,
+  // how each speck lands (see FRINGE in js/brush.js)
+  brushSpread: 0.42, // width of a stroke's dense core, in brush radii
+  brushDensity: 1.7, // specks per art px² of the brush
+  brushSpeck: 1, // size of one speck, in art px
   sprayAmount: 0.01, // share of each stroke's specks that stray out around it, 0..0.9
   // how far each brush's stray specks reach, as a multiple of its radius (one per brush)
   sprayRanges: [0.5, 0.5, 0.3],
@@ -66,6 +73,8 @@ function migrate(saved) {
     if (saved.sprayAmount === 0.05) delete saved.sprayAmount;
     if (saved.sprayRange === 0.95) delete saved.sprayRange;
   }
+  // the fineness went to 2× by default; one picked while trying it out takes it
+  if ((saved.version || 0) < 16) delete saved.detail;
   // the brushes got new default sizes; settings saved with the old ones take them
   if ((saved.version || 0) < 14 && JSON.stringify(saved.brushes) === '[2.6,4.6,8]') delete saved.brushes;
   // the room above the album's title went down to 63 px
@@ -140,15 +149,21 @@ export function randomColor(previous) {
   const others = list.filter((c) => c !== previous);
   return pick(others.length ? others : list);
 }
-// The spray around a drawn stroke, as sprayStamp takes it.
-export const sprayFringe = (range) => ({ amount: settings.sprayAmount, range });
+// How a drawn stroke is sprayed, as sprayStamp takes it.
+export const sprayFringe = (range) => ({
+  amount: settings.sprayAmount,
+  range,
+  spread: settings.brushSpread,
+  density: settings.brushDensity,
+  speck: settings.brushSpeck,
+});
 
 // The spray range of brush i (brushes added before it had one get the usual).
 export const sprayRangeOf = (i) => (Number.isFinite(settings.sprayRanges?.[i]) ? settings.sprayRanges[i] : 0.5);
 
-// A random brush: its radius and its spray range.
+// A random brush: its radius (in art px, at this page's fineness) and its spray range.
 export function randomBrush() {
-  if (!settings.brushes.length) return { r: 4.2, range: 0.5 };
+  if (!settings.brushes.length) return { r: 4.2 * DETAIL, range: 0.5 };
   const i = Math.floor(Math.random() * settings.brushes.length);
-  return { r: settings.brushes[i], range: sprayRangeOf(i) };
+  return { r: settings.brushes[i] * DETAIL, range: sprayRangeOf(i) };
 }

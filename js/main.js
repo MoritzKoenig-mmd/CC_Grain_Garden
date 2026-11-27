@@ -1,4 +1,3 @@
-import { ART } from './config.js';
 import { Flower } from './flower.js';
 import { Garden } from './garden.js';
 import { Studio } from './studio.js';
@@ -106,9 +105,9 @@ function fromRoom(records) {
     try {
       let f = here.get(r.id);
       if (!f) {
-        f = new Flower({ ...r, pixels: store.decode(r.pixels, ART * ART) });
+        f = new Flower({ ...r, pixels: store.decodeGrid(r.pixels, store.sizeOf(r)) });
       } else {
-        if (f.rev !== r.rev) f.replace({ ...r, pixels: store.decode(r.pixels, ART * ART) });
+        if (f.rev !== r.rev) f.replace({ ...r, pixels: store.decodeGrid(r.pixels, store.sizeOf(r)) });
         // being tended here, its clock is held back until we let go of it
         else if (f.pausedAt == null) f.tendedAt = r.tendedAt;
         // the one we're carrying stays in our hand
@@ -183,7 +182,7 @@ function clearGarden() {
 
 function gardenAlone() {
   mode = 'alone';
-  let records = store.load(ART * ART);
+  let records = store.load();
   if (records === null) records = seedFlowers();
   garden.setFlowers([...records.map((r) => new Flower(r)), ...early.splice(0)]);
   save();

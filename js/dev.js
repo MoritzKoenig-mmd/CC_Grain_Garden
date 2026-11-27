@@ -1,8 +1,8 @@
 // Dev mode: a settings panel. Open with ?dev in the address, or Shift+D.
 
 import { settings, update, reset, sprayFringe, sprayRangeOf } from './settings.js';
-import { sprayStamp, bufferToImage } from './brush.js';
-import { toRgbTable } from './config.js';
+import { sprayStamp, sprayLine, bufferToImage } from './brush.js';
+import { toRgbTable, ART, DETAIL, DETAILS, BASE } from './config.js';
 
 // Lifespan slider is logarithmic: 15 seconds … 7 days.
 const MIN_MIN = 0.25;
@@ -85,14 +85,44 @@ function sure(label, what, action) {
   return btn;
 }
 
+// A dab of brush r (in BASE px), at this page's fineness.
 function brushPreview(r, range) {
-  const size = 40;
+  const size = Math.round(40 * DETAIL);
   const c = el('canvas', { width: size, height: size, class: 'dev-brush' });
   const buf = new Uint8Array(size * size);
-  for (let i = 0; i < 3; i++) sprayStamp(buf, size, size / 2 - 0.5, size / 2 - 0.5, r, 1, Math.random, sprayFringe(range));
+  for (let i = 0; i < 3; i++) sprayStamp(buf, size, size / 2 - 0.5, size / 2 - 0.5, r * DETAIL, 1, Math.random, sprayFringe(range));
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(size, size);
   bufferToImage(buf, img, toRgbTable(['#2a2530']));
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+// A test sheet: one wavy stroke per brush, drawn at about the size the garden
+// shows them, so the grain can be judged as it will look.
+const STRIP_W = 140; // BASE px
+function strokePreview(colors) {
+  const w = Math.round(STRIP_W * DETAIL);
+  const lane = 30; // BASE px per brush
+  const n = Math.max(1, settings.brushes.length);
+  const h = Math.round(lane * n * DETAIL);
+  const c = el('canvas', { width: w, height: h, class: 'dev-strokes', style: `aspect-ratio: ${w} / ${h}` });
+  const buf = new Uint8Array(w * h);
+  settings.brushes.forEach((r, i) => {
+    const fringe = sprayFringe(sprayRangeOf(i));
+    const cy = (lane * (i + 0.5)) * DETAIL;
+    let last = null;
+    for (let k = 0; k <= 40; k++) {
+      const t = k / 40;
+      const x = (12 + t * (STRIP_W - 24)) * DETAIL;
+      const y = cy + Math.sin(t * Math.PI * 2.2 + i) * 6 * DETAIL;
+      if (last) sprayLine(buf, w, last[0], last[1], x, y, r * DETAIL, (i % colors.length) + 1, Math.random, fringe, h);
+      last = [x, y];
+    }
+  });
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(w, h);
+  bufferToImage(buf, img, toRgbTable(colors));
   ctx.putImageData(img, 0, 0);
   return c;
 }
@@ -237,7 +267,14 @@ export class DevPanel {
 
     // the brush previews, redrawn when the spray settings change
     const previews = [];
-    const redrawPreviews = () => previews.forEach(({ wrap, i }) => wrap.replaceChildren(brushPreview(settings.brushes[i], sprayRangeOf(i))));
+    const strokeColors = () => (settings.colors.length ? settings.colors : ['#2a2530']);
+    const strokes = el('div', { class: 'dev-strokes-wrap', title: 'a test stroke with each brush, at about garden size (click to spray again)' }, strokePreview(strokeColors()));
+    const redrawStrokes = () => strokes.replaceChildren(strokePreview(strokeColors()));
+    strokes.addEventListener('click', redrawStrokes);
+    const redrawPreviews = () => {
+      previews.forEach(({ wrap, i }) => wrap.replaceChildren(brushPreview(settings.brushes[i], sprayRangeOf(i))));
+      redrawStrokes();
+    };
     const sprayAmount = el('output', { class: 'dev-value' }, `${(s.sprayAmount * 100).toFixed(1)}%`);
     const albumColumns = el('output', { class: 'dev-value' }, String(s.albumColumns));
     const albumGap = el('output', { class: 'dev-value' }, `${s.albumGap} px`);
@@ -266,6 +303,7 @@ export class DevPanel {
         update({ sprayRanges: next });
         rangeVal.textContent = times(v / 100);
         prev.replaceChildren(brushPreview(settings.brushes[i], v / 100));
+        redrawStrokes();
       });
       rangeRow.classList.add('dev-sub');
       const sizeRow = el(
@@ -286,6 +324,7 @@ export class DevPanel {
             update({ brushes: next });
             val.textContent = v.toFixed(1);
             prev.replaceChildren(brushPreview(v, sprayRangeOf(i)));
+            redrawStrokes();
           },
         }),
         val,
@@ -309,6 +348,39 @@ export class DevPanel {
       );
       return el('div', { class: 'dev-brush-item' }, sizeRow, rangeRow);
     });
+
+    // how the specks land, for every brush
+    const look = (key, label, title, attrs, show) => {
+      const out = el('output', { class: 'dev-value' }, show(s[key]));
+      return slider(label, title, attrs, s[key], out, (v) => {
+        update({ [key]: v });
+        out.textContent = show(v);
+        redrawPreviews();
+      });
+    };
+    // the fineness: the drawing grid is rebuilt on loading, so it reloads the page
+    const fineOut = el('output', { class: 'dev-value' }, `${DETAIL}×`);
+    const fineAt = Math.max(0, DETAILS.indexOf(s.detail));
+    const fineness = el(
+      'label',
+      { class: 'dev-row', title: 'how fine the grain of every drawing is: each of the old pixels is split into this many per side (reloads the page)' },
+      el('span', { class: 'dev-label' }, 'fineness'),
+      el('input', {
+        type: 'range',
+        min: 0,
+        max: DETAILS.length - 1,
+        step: 1,
+        value: fineAt,
+        'aria-label': 'fineness',
+        oninput: (e) => (fineOut.textContent = `${DETAILS[e.target.value]}×`),
+        onchange: (e) => {
+          update({ detail: DETAILS[e.target.value] });
+          location.reload();
+        },
+      }),
+      fineOut,
+    );
+    const fineNote = el('p', { class: 'dev-note' }, `drawings are ${ART}×${ART} px (${BASE} at 1×); changing it reloads the page`);
 
     // per flower / per stroke switch for one setting key
     const perRow = (key, title) =>
@@ -522,6 +594,13 @@ export class DevPanel {
       el(
         'section',
         {},
+        el('h3', {}, 'brush grain'),
+        strokes,
+        fineness,
+        fineNote,
+        look('brushSpread', 'softness', 'how wide each stroke\'s dense core is: lower is tight and crisp, higher soft and misty', { min: 0.15, max: 1, step: 0.01 }, fixed(2)),
+        look('brushDensity', 'density', 'how many specks land per pixel of the brush: lower lets the paper show through, higher fills it in', { min: 0.2, max: 6, step: 0.05 }, fixed(2)),
+        look('brushSpeck', 'speck', 'how big each speck is, in pixels of the drawing (1 is the finest)', { min: 1, max: 4, step: 1 }, (v) => `${v} px`),
         el('h3', {}, 'brush sizes'),
         ...brushes,
         slider('spray', 'how much spray lands around a stroke (share of its specks that stray)', { min: 0, max: 200, step: 1 }, Math.round(s.sprayAmount * 1000), sprayAmount, (v) => {
@@ -602,7 +681,9 @@ export class DevPanel {
             class: 'dev-add',
             onclick: () => {
               reset();
-              rerender();
+              // the default fineness only takes on a fresh page
+              if (settings.detail !== DETAIL) location.reload();
+              else rerender();
             },
           },
           'reset to defaults',

@@ -1,12 +1,14 @@
 // Predefined stems a new drawing starts with. Each shape is picked at random,
 // sometimes mirrored, and drawn with a little hand wobble, so no two match.
 
-import { ART } from './config.js';
+import { ART, BASE, DETAIL } from './config.js';
 import { sprayPath } from './brush.js';
 import { loop, wobble } from './seed.js';
 import { mulberry32 } from './noise.js';
 
-const MID = ART / 2;
+// The shapes are laid out in BASE px and sprayed at the drawing's fineness.
+const MID = BASE / 2;
+const fine = (pts) => pts.map(([x, y]) => [x * DETAIL, y * DETAIL]);
 
 // How much of each shape below is drawn: the stem is only a hint coming up
 // out of the bottom of the paper, so the sheet stays free for the flower.
@@ -41,28 +43,29 @@ function stemPath(x0, y0, x1, y1, bend, s, rand) {
 }
 
 // A leaf as an outlined loop, pointing outward and a little upward.
-function leaf(buf, pts, at, side, size, value, r, rand) {
+function leaf(buf, pts, at, side, size, value, r, rand, fringe) {
   const [x, y] = pts[Math.round(at * (pts.length - 1))];
   const ang = side > 0 ? -0.55 : Math.PI + 0.55;
   const cx = x + Math.cos(ang) * size;
   const cy = y + Math.sin(ang) * size;
-  sprayPath(buf, ART, loop(cx, cy, size, size * 0.42, ang, rand, 0.7), r * 0.85, value, rand);
+  sprayPath(buf, ART, fine(loop(cx, cy, size, size * 0.42, ang, rand, 0.7)), r * 0.85 * DETAIL, value, rand, fringe);
 }
 
-// Spray a random stem into `buf` using pixel value `value`.
-export function drawStem(buf, value, rand = Math.random) {
+// Spray a random stem into `buf` using pixel value `value`, with the brush
+// `fringe` (as sprayStamp takes it; the default brush if left out).
+export function drawStem(buf, value, rand = Math.random, fringe = undefined) {
   const def = STEMS[Math.floor(rand() * STEMS.length)];
   const m = rand() < 0.5 ? -1 : 1; // mirror half of the time
   const reach = REACH[0] + rand() * (REACH[1] - REACH[0]);
   const x0 = MID + (rand() - 0.5) * 8;
-  const y0 = ART - 3;
+  const y0 = BASE - 3;
   const tx = x0 + ((def.top[0] - MID) * m + (rand() - 0.5) * 6) * reach;
   const ty = y0 - (y0 - def.top[1] + (rand() - 0.5) * 6) * reach;
   const r = 2.3 + rand() * 0.5; // thinner than a flower stroke: a hint, not a stalk
   const pts = stemPath(x0, y0, tx, ty, def.bend * m * reach, def.s * m * reach, rand);
-  sprayPath(buf, ART, pts, r, value, rand);
+  sprayPath(buf, ART, fine(pts), r * DETAIL, value, rand, fringe);
   for (const [at, side, size] of def.leaves) {
-    leaf(buf, pts, at, side * m, size * LEAF * (0.85 + rand() * 0.3), value, r, rand);
+    leaf(buf, pts, at, side * m, size * LEAF * (0.85 + rand() * 0.3), value, r, rand, fringe);
   }
 }
 
@@ -72,9 +75,10 @@ export function drawStem(buf, value, rand = Math.random) {
 // drawing by STEM_GROW times the bloom's size (its width or height, whichever
 // is bigger), so a big flower stands a little taller than a small one.
 // STEM_MAX caps it (art px).
+// (STEM_MAX, OVERLAP and the other lengths below are BASE px, times DETAIL.)
 const STEM_GROW = 0.24;
-const STEM_MAX = 30;
-const OVERLAP = 8; // rows it reaches up behind the drawing, to fill the paper's grainy edge
+const STEM_MAX = 30 * DETAIL;
+const OVERLAP = Math.round(8 * DETAIL); // rows it reaches up behind the drawing, to fill the paper's grainy edge
 
 // The rest of a stem that runs off the bottom of the paper: a buffer as wide
 // as the drawing and `h` rows tall, standing in the ground. Its top OVERLAP
@@ -104,7 +108,7 @@ export function growStem(pixels, seed, prefer = 0) {
       right = Math.max(right, maxX[y]);
     }
   }
-  if (bottom < ART - 8) return null;
+  if (bottom < ART - 8 * DETAIL) return null;
 
   // the stem already drawn: everything under the bloom, which ends where the
   // drawing first narrows to a neck below its widest row (leaves further
@@ -114,11 +118,11 @@ export function growStem(pixels, seed, prefer = 0) {
   let widest = 0, at = top;
   for (let r = top; r <= bottom; r++) if (span(r) > widest) [widest, at] = [span(r), r];
   let y = at;
-  while (y <= bottom && span(y) >= Math.max(10, widest * 0.4)) y++;
+  while (y <= bottom && span(y) >= Math.max(10 * DETAIL, widest * 0.4)) y++;
   const drawn = bottom + 1 - y;
-  if (drawn < 3) return null;
+  if (drawn < 3 * DETAIL) return null;
   const bloom = Math.max(width, y - top);
-  const lift = Math.max(4, Math.min(STEM_MAX, Math.round(bloom * STEM_GROW)));
+  const lift = Math.round(Math.max(4 * DETAIL, Math.min(STEM_MAX, bloom * STEM_GROW)));
 
   // carry on where the drawn stem leaves the paper: same place, colour,
   // thickness and lean
@@ -129,8 +133,9 @@ export function growStem(pixels, seed, prefer = 0) {
   };
   const foot = bottom - Math.min(OVERLAP, drawn) + 1;
   const sx = centre(foot, bottom);
-  const up = centre(foot - 10, foot - 1) ?? sx;
-  const lean = Math.max(-0.6, Math.min(0.6, (sx - up) / 10)); // x per row, going down
+  const ten = Math.round(10 * DETAIL);
+  const up = centre(foot - ten, foot - 1) ?? sx;
+  const lean = Math.max(-0.6, Math.min(0.6, (sx - up) / ten)); // x per row, going down
   const counts = new Map();
   let thick = 0, rows = 0;
   for (let r = foot; r <= bottom; r++) {
@@ -143,13 +148,13 @@ export function growStem(pixels, seed, prefer = 0) {
     }
   }
   const value = counts.has(prefer) ? prefer : [...counts].sort((a, b) => b[1] - a[1])[0][0];
-  const radius = Math.max(2, Math.min(5, thick / rows / 1.7));
+  const radius = Math.max(2 * DETAIL, Math.min(5 * DETAIL, thick / rows / 1.7));
 
   const rand = mulberry32(seed ^ 0x5bd1e995);
   const h = OVERLAP + lift;
   const buf = new Uint8Array(ART * h);
-  const wb = wobble(rand, 1);
-  const bow = (rand() - 0.5) * 6;
+  const wb = wobble(rand, DETAIL);
+  const bow = (rand() - 0.5) * 6 * DETAIL;
   const L = h - 1 - (bottom + 1 - foot);
   const pts = [];
   for (let i = 0; i <= 40; i++) {

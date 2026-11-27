@@ -22,6 +22,7 @@ export class Studio {
     this.onKeep = onKeep;
     this.el = document.getElementById('studio');
     this.paper = document.getElementById('paper');
+    this.paper.width = this.paper.height = ART; // (index.html says 144: the grid at fineness 1)
     this.ctx = this.paper.getContext('2d');
     this.img = this.ctx.createImageData(ART, ART);
     this.buf = new Uint8Array(ART * ART);
@@ -76,7 +77,7 @@ export class Studio {
     this.#setErasing(false);
     // a new drawing starts from one of the predefined stems
     if (!flower && settings.stems) {
-      drawStem(this.buf, this.#indexOf(settings.stemColor));
+      drawStem(this.buf, this.#indexOf(settings.stemColor), Math.random, sprayFringe(0.5));
       this.hex = settings.stemColor; // so the first stroke differs from the stem
     }
     this.#clip();
