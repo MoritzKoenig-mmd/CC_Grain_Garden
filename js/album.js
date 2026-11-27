@@ -1,4 +1,4 @@
-import { ART, toRgbTable, toNeon } from './config.js';
+import { ART, DETAIL, toRgbTable, toNeon } from './config.js';
 import * as store from './store.js';
 import { settings, onSettings } from './settings.js';
 import { drawFrame } from './deco.js';
@@ -23,7 +23,16 @@ function entryOf(r) {
   if (!Array.isArray(r.box) || r.box.length !== 4 || !r.box.every(Number.isInteger)) return null;
   if (!Array.isArray(r.colors) || !r.colors.every((c) => typeof c === 'string')) return null;
   // (flowers kept before the colours went neon are shown in neon too)
-  return { id: r.id, keptAt: r.keptAt, colors: toNeon(r.colors), box: [...r.box], pixels: r.pixels };
+  const e = { id: r.id, keptAt: r.keptAt, colors: toNeon(r.colors), box: [...r.box], size: ART, pixels: r.pixels };
+  // kept on a grid of another fineness (see DETAIL in js/config.js): resampled to this one
+  const size = store.sizeOf(r);
+  if (size !== ART) {
+    const pixels = store.decodeGrid(r.pixels, size);
+    e.box = boxOf(pixels);
+    if (!e.box) return null;
+    e.pixels = store.encode(pixels);
+  }
+  return e;
 }
 
 const dateLabel = (ms) =>
@@ -66,9 +75,10 @@ function imageOf(entry) {
   return img;
 }
 
-// The exported PNG: one art px is EXPORT_PX image px, and the strip is as wide
-// as on screen relative to the drawings (a whole drawing fills 55% of it).
-const EXPORT_PX = 3;
+// The exported PNG: one art px is EXPORT_PX image px (a whole number, about 3
+// per BASE px, so every grain comes out the same size), and the strip is as
+// wide as on screen relative to the drawings (a whole drawing fills 55% of it).
+const EXPORT_PX = Math.max(1, Math.round(3 / DETAIL));
 const EXPORT_W = Math.round((ART * EXPORT_PX) / 0.55);
 
 export class Album {
@@ -228,6 +238,7 @@ export class Album {
       keptAt: Date.now(),
       colors: [...colors],
       box,
+      size: ART, // the grid it's drawn on
       pixels: store.encode(pixels),
     };
     // this browser's copy (with its number, as albums from before sharing had)
@@ -264,7 +275,7 @@ export class Album {
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
-    canvas.style.setProperty('--w', w);
+    canvas.style.setProperty('--w', w / DETAIL); // its width in the album's (BASE) px
     canvas.setAttribute('role', 'img');
     canvas.setAttribute('aria-label', `kept flower ${label}`);
     canvas.entry = entry;

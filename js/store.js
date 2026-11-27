@@ -2,6 +2,8 @@
 // the shared room (js/shared.js), and this browser's copy of the flowers kept
 // in it (the album itself is shared, js/album.js).
 
+import { ART, BASE } from './config.js';
+
 const KEY = 'grain-garden/v1';
 const ALBUM_KEY = 'grain-garden/album/v1';
 
@@ -34,12 +36,33 @@ export function decode(str, length) {
   return buf;
 }
 
+// Scale a square palette buffer `from` px per side to `to` px per side,
+// nearest neighbour (no colours get mixed, it's a palette).
+export function resample(buf, from, to) {
+  if (from === to) return buf;
+  const out = new Uint8Array(to * to);
+  const k = from / to;
+  for (let y = 0; y < to; y++) {
+    const row = Math.min(from - 1, Math.floor((y + 0.5) * k)) * from;
+    for (let x = 0; x < to; x++) out[y * to + x] = buf[row + Math.min(from - 1, Math.floor((x + 0.5) * k))];
+  }
+  return out;
+}
+
+// The grid a stored drawing was made on: records from before they said are BASE.
+export const sizeOf = (r) => (Number.isInteger(r?.size) && r.size >= 16 && r.size <= 1024 ? r.size : BASE);
+
+// A stored drawing's pixels on this page's grid (ART px per side).
+export function decodeGrid(str, size = BASE) {
+  return resample(decode(str, size * size), size, ART);
+}
+
 // Returns null on a first visit (nothing stored yet), otherwise an array.
-export function load(length) {
+export function load() {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw == null) return null;
-    return JSON.parse(raw).map((r) => ({ ...r, pixels: decode(r.pixels, length) }));
+    return JSON.parse(raw).map((r) => ({ ...r, pixels: decodeGrid(r.pixels, sizeOf(r)) }));
   } catch {
     return null;
   }
@@ -56,6 +79,7 @@ export function toRecord(f) {
     seed: f.seed,
     // time spent being tended doesn't count toward withering
     tendedAt: f.pausedAt == null ? f.tendedAt : f.tendedAt + (Date.now() - f.pausedAt),
+    size: ART, // the grid it's drawn on (see DETAIL in js/config.js)
     pixels: encode(f.pixels),
   };
 }

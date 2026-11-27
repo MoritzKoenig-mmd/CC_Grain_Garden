@@ -10,22 +10,39 @@ function gauss(rand) {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-// The fringe: `amount` is the share of specks that stray from the core (0..1)
-// and `range` how far they travel, as a multiple of the radius. More fringe
-// adds specks rather than taking them from the core, so the core stays as dense.
-export const FRINGE = { amount: 0.05, range: 0.95 };
+// How a stroke is sprayed (all but `amount` and `range` can be left out):
+// - amount: the share of specks that stray from the core (0..0.9)
+// - range: how far they travel, as a multiple of the radius. More fringe adds
+//   specks rather than taking them from the core, so the core stays as dense.
+// - spread: how wide the core is, as a multiple of the radius. Lower gives a
+//   tight stroke with a crisp edge, higher a soft, misty one.
+// - density: specks per art px² of the brush. Lower lets the paper show
+//   through the stroke, higher fills it in.
+// - speck: each speck's size in art px (1 is the finest grain there is).
+export const FRINGE = { amount: 0.05, range: 0.95, spread: 0.42, density: 1.7, speck: 1 };
 
 // `size` is the buffer's width; a buffer that isn't square passes its `height` too.
 export function sprayStamp(buf, size, cx, cy, r, value, rand = Math.random, fringe = FRINGE, height = size) {
   const amount = Math.min(0.9, Math.max(0, fringe.amount));
-  const count = Math.ceil(((r * r * 1.7 + 2) * (1 - FRINGE.amount)) / (1 - amount));
+  const spread = fringe.spread ?? FRINGE.spread;
+  const density = fringe.density ?? FRINGE.density;
+  const speck = Math.max(1, Math.round(fringe.speck ?? 1));
+  // bigger specks cover more each, so fewer of them land
+  const count = Math.ceil(((r * r * density + 2) * (1 - FRINGE.amount)) / (1 - amount) / (speck * speck));
+  const off = (speck - 1) / 2;
   for (let i = 0; i < count; i++) {
     // a few stray specks travel further out
-    const spread = rand() < amount ? r * fringe.range : r * 0.42;
-    const x = Math.round(cx + gauss(rand) * spread);
-    const y = Math.round(cy + gauss(rand) * spread);
-    if (x < 0 || y < 0 || x >= size || y >= height) continue;
-    buf[y * size + x] = value;
+    const sd = rand() < amount ? r * fringe.range : r * spread;
+    const x0 = Math.round(cx + gauss(rand) * sd - off);
+    const y0 = Math.round(cy + gauss(rand) * sd - off);
+    if (speck === 1) {
+      if (x0 < 0 || y0 < 0 || x0 >= size || y0 >= height) continue;
+      buf[y0 * size + x0] = value;
+      continue;
+    }
+    for (let y = Math.max(0, y0); y < Math.min(height, y0 + speck); y++) {
+      for (let x = Math.max(0, x0); x < Math.min(size, x0 + speck); x++) buf[y * size + x] = value;
+    }
   }
 }
 
@@ -38,11 +55,11 @@ export function sprayLine(buf, size, x0, y0, x1, y1, r, value, rand = Math.rando
   }
 }
 
-export function sprayPath(buf, size, points, r, value, rand = Math.random) {
+export function sprayPath(buf, size, points, r, value, rand = Math.random, fringe = FRINGE) {
   for (let i = 1; i < points.length; i++) {
     const [ax, ay] = points[i - 1];
     const [bx, by] = points[i];
-    sprayLine(buf, size, ax, ay, bx, by, r, value, rand);
+    sprayLine(buf, size, ax, ay, bx, by, r, value, rand, fringe);
   }
 }
 

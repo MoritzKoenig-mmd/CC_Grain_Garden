@@ -1,12 +1,35 @@
 // Fixed constants. Everything people can tweak lives in settings.js (dev mode).
 
 // Resolution of a flower drawing (art pixels per side). Drawings are stored
-// at this size and scaled up with hard edges, which gives the chunky grain.
-export const ART = 144;
+// at this size and scaled up with hard edges, which gives the grain.
+//
+// BASE is the grid everything was first laid out on: brush radii, stem shapes,
+// the seed flowers and the drawing's size on screen are all given in BASE px.
+// DETAIL (the "fineness" in dev mode) splits each of those into DETAIL×DETAIL
+// finer art px, so the same strokes come out with a finer grain. Each flower
+// records the grid it was drawn on (js/store.js), so flowers drawn at another
+// fineness are resampled to this one.
+export const BASE = 144;
+export const DEFAULT_DETAIL = 2;
+export const DETAILS = [1, 1.5, 2, 2.5, 3];
+function readDetail() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('grain-garden/settings') || 'null');
+    // a fineness picked while it was being tried out (before settings version 16) gives way to the default
+    const d = (saved?.version || 0) >= 16 ? saved.detail : undefined;
+    return DETAILS.includes(d) ? d : DEFAULT_DETAIL;
+  } catch {
+    return DEFAULT_DETAIL;
+  }
+}
+export const ART = Math.round(BASE * readDetail());
+// art px per BASE px (exact, from the rounded grid)
+export const DETAIL = ART / BASE;
 
-// Screen px per art px. Everything sprayed (flowers, the gate, the tree) is
-// drawn at this one size, so the grain is the same grain everywhere; it only
-// follows the size of the screen.
+// Screen px per BASE px (divide by DETAIL for one art px of a drawing).
+// Everything sprayed (flowers, the gate, the tree) is laid out at this one
+// size; it only follows the size of the screen. The flowers' grain is DETAIL
+// times finer than the gate's and the tree's.
 export const artScale = (w, h) => 1.9 * Math.min(1.3, Math.max(0.5, Math.min(h / 850, w / 900)));
 
 // Width of the "drying" edge in front of the erosion (0..1 of the noise range).

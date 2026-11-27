@@ -1,4 +1,4 @@
-import { ART, DRY_BAND, DUST, ASH, LEGACY_PALETTE, toRgbTable, toNeon } from "./config.js";
+import { ART, DETAIL, DRY_BAND, DUST, ASH, LEGACY_PALETTE, toRgbTable, toNeon } from "./config.js";
 import { settings, lifespanMs, isStemColor } from "./settings.js";
 import { makeWitherField, makeDissolveField, randomSeed } from './noise.js';
 import { growStem } from './stems.js';
@@ -67,7 +67,7 @@ export class Flower {
 
   #rebuild() {
     this.rgb = toRgbTable(this.colors);
-    Object.assign(this, makeWitherField(ART, this.seed));
+    Object.assign(this, makeWitherField(ART, this.seed, DETAIL));
     this.level = -1;
     this.bloomGone = -1;
     this.stemGone = -1;
@@ -104,7 +104,7 @@ export class Flower {
     canvas.width = ART;
     canvas.height = stem.h;
     const ctx = canvas.getContext('2d');
-    const decay = makeDissolveField(ART, stem.h, (this.seed + 1) >>> 0);
+    const decay = makeDissolveField(ART, stem.h, (this.seed + 1) >>> 0, DETAIL);
     this.stem = {
       ...stem,
       ...decay,
@@ -258,7 +258,7 @@ export class Flower {
     const ix = Math.floor(lx);
     const iy = Math.floor(ly);
     const st = this.stem;
-    const R = 4;
+    const R = Math.round(4 * DETAIL);
     for (let dy = -R; dy <= R; dy++) {
       const y = iy + dy;
       for (let dx = -R; dx <= R; dx++) {

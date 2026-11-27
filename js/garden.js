@@ -1,4 +1,4 @@
-import { ART, artScale } from './config.js';
+import { ART, DETAIL, artScale } from './config.js';
 import { Flower } from './flower.js';
 import { settings } from "./settings.js";
 import { smoothDamp } from './bee.js';
@@ -39,7 +39,8 @@ export class Garden {
     this.canvas.width = Math.round(this.w * dpr);
     this.canvas.height = Math.round(this.h * dpr);
     // every flower is drawn at the same size, which only follows the screen
-    this.scale = artScale(this.w, this.h);
+    this.scale = artScale(this.w, this.h); // per BASE px, for the places
+    this.flowerScale = this.scale / DETAIL; // per art px of a drawing
     for (const p of this.places) p.layout(this.w, this.h, this.scale);
   }
 
@@ -124,8 +125,8 @@ export class Garden {
 
   #placement(f) {
     const at = f.carry?.at;
-    if (at) return { x: at.x, y: at.y, s: this.scale };
-    return { x: f.nx * this.w, y: this.groundY(f.ny), s: this.scale };
+    if (at) return { x: at.x, y: at.y, s: this.flowerScale };
+    return { x: f.nx * this.w, y: this.groundY(f.ny), s: this.flowerScale };
   }
 
   // ---------- carried by someone else ----------
@@ -170,7 +171,7 @@ export class Garden {
   // Put the flower so that its grabbed point (gx, gy, in art px from its base)
   // sits under the pointer.
   #moveTo(f, px, py, gx, gy) {
-    const s = this.scale;
+    const s = this.flowerScale;
     const y = Math.min(this.h, Math.max(this.h * 0.06, py - gy * s));
     f.ny = this.nyFor(y);
     f.nx = Math.min(1, Math.max(0, (px - gx * s) / this.w));
@@ -182,7 +183,8 @@ export class Garden {
       const { x, y, s } = this.#placement(f);
       const lx = (px - x) / s + f.box.cx;
       const ly = (py - y) / s + f.box.bottom + f.lift;
-      if (lx < -4 || ly < -4 || lx > ART + 4 || ly > f.box.bottom + f.lift + 4) continue;
+      const m = 4 * DETAIL;
+      if (lx < -m || ly < -m || lx > ART + m || ly > f.box.bottom + f.lift + m) continue;
       if (f.hitTest(lx, ly)) return f;
     }
     return null;
